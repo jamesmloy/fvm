@@ -24,10 +24,13 @@ class COMETModel : public Model
 	     TkspList& kspaces,PhononMacro& macro);
   
   void init();
+  void inite();
+  void initebc();
   void updateTL();
   void advance(int);
   T HeatFluxIntegral(const Mesh& mesh, const int faceGroupId);
   T HeatFluxIntegralFace(const Mesh& mesh, const int f);
+  T HeatFluxIntegralArr(const Mesh& mesh, const int faceGroupId, const int fcellId);
   ArrayBase* modewiseHeatFluxIntegral(const Mesh& mesh, const int faceGroupId);
   T getWallArea(const Mesh& mesh, const int faceGroupId);
   VectorT3 getWallAreaVector(const Mesh& mesh, const int faceGroupId);
@@ -52,6 +55,7 @@ class COMETModel : public Model
   void calcBandRelEnergy();
   void calcBandFlux();
   ArrayBase* binwiseHeatFluxIntegral(const Mesh& mesh, const int faceGroupId);
+
 
  private:
   
@@ -104,6 +108,13 @@ struct COMETModelOptions : public FloatVarDict<T>
   int maxNewton;
   string Scattering;
   bool Source;
+  string SourceType;
+  int dirSweeps;
+  int PyLevels;
+  int verb;
+  int linear;
+  int direct;
+  int directt;
 };
 
 %template(COMETBCA) COMETBC<ATYPE_STR>;

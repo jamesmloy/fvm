@@ -60,7 +60,7 @@ class COMETInterface
     const StorageSite& cells0=mesh0.getCells();
     const StorageSite& cells1=mesh1.getCells();
     const CRConnectivity& faceCells0=mesh0.getFaceCells(faces0);
-    const CRConnectivity& faceCells1=mesh1.getFaceCells(faces1);
+
     const CRConnectivity& CellCells1=mesh1.getCellCells();
     const CRConnectivity& CellFaces1=mesh1.getCellFaces();
     const int face1Offset=faces1.getOffset();
@@ -127,9 +127,9 @@ class COMETInterface
 	    IntArray pos0other(k0kpts.getLength());
 	    IntArray pos1other(k1kpts.getLength());
 	    const T t01=transArray01[binIndx];
-	    const T r01=1.-t01;
+
 	    const T t10=transArray10[binIndx];
-	    const T r10=1-t10;
+
 
 	    int out0(0);
 	    int out1(0);

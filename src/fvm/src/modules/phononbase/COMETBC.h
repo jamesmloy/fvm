@@ -31,7 +31,7 @@ struct COMETModelOptions : public FloatVarDict<T>
   {
     this->defineVar("timeStep",T(0.1));
     this->defineVar("initialTemperature",T(310.0));
-    this->defineVar("Tref",T(299.0));
+    this->defineVar("Tref",T(300.0));
     this->printNormalizedResiduals = true;
     this->transient = false;
     this->timeDiscretizationOrder=1;
@@ -39,9 +39,15 @@ struct COMETModelOptions : public FloatVarDict<T>
     this->relTolerance=1-4;
     this->showResidual=5;
     this->maxLevels=2;
+    this->PyLevels=0;
+    this->direct=1;
+    this->directt=1;
+    this->verb=0;
     this->AgglomerationMethod="FaceArea";
     this->preSweeps=0;
     this->postSweeps=2;
+    this->dirSweeps=2;
+    this->linear=0;
     this->relFactor=.1;
     this->withNormal=false;
     this->NewtonTol=1e-4;
@@ -52,6 +58,8 @@ struct COMETModelOptions : public FloatVarDict<T>
     this->maxNewton=15;
     this->Scattering="SMRT";
     this->Source=false;
+    this->SourceType="Default";
+    this->defineVar("FrequencyCutOff",T(1e12));
   }
   
   bool printNormalizedResiduals;
@@ -72,9 +80,15 @@ struct COMETModelOptions : public FloatVarDict<T>
   string DomainStats;
   int minNewton;
   int maxNewton;
+  int direct;
+  int directt;
+  int PyLevels;
+  int verb;
+  int linear;
   string Scattering;
   bool Source;
-
+  string SourceType;
+  int dirSweeps;
 };
 
 template<class T>

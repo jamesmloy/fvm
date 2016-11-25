@@ -41,7 +41,7 @@ class pmode
     _FASCorrection("FASCorrection"),
     _reflections(),
     _index(),
-    _Tref(299.)
+    _Tref(300.)
       {}
     
  pmode():
@@ -53,7 +53,7 @@ class pmode
     _FASCorrection("FASCorrection"),
     _reflections(),
     _index(),
-    _Tref(299.)
+    _Tref(300.)
       {};
       
   Tvec getv(){return _vg;}
@@ -91,7 +91,7 @@ class pmode
     const T kb=8.617343e-5;  // (eV/K)
     T e0kp;
 	
-    e0kp=hbar*_omega/(exp(hbar*_omega/kb/Tl)-1);
+    e0kp=hbar*_omega/(exp(hbar*_omega/kb/Tl)-1); //-hbar*_omega/(exp(hbar*_omega/kb/_Tref)-1);;
     //e0kp=1./(exp(hbar*_omega/kb/Tl)-1);
     //T eref=1./(exp(hbar*_omega/kb/300)-1);
 

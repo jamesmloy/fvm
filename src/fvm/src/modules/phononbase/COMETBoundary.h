@@ -145,10 +145,8 @@ class COMETBoundary
 	
 	for(int k=0;k<_kspace.gettotmodes();k++)
 	  {
-	    const T minVal=pointMin[k];
-	    const T maxVal=pointMax[k];
-	    const T de0(Grads[k]*dr0);
-	    T& cl=pointLim[k];
+	    //const T de0(Grads[k]*dr0);
+	    //T& cl=pointLim[k];
 	    //computeLimitCoeff(cl, _eArray[c0ind], de0, minVal, maxVal, lf);
 	    c0ind++;
 	  }  

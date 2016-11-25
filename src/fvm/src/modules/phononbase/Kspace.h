@@ -20,6 +20,7 @@
 #include "SquareTensor.h"
 #include "ScatteringKernel.h"
 #include "RelaxationTimeFunction.h"
+#include "COMETBC.h"
 
 template<class T>
 class DensityOfStates;
@@ -53,6 +54,7 @@ class Kspace
   typedef typename Tkspace::TransmissionMap::iterator TransIt;
   typedef pair<const StorageSite*, const StorageSite*> EntryIndex;
   typedef map<EntryIndex, shared_ptr<ArrayBase> > GhostArrayMap;
+  typedef COMETModelOptions<T> COpts;
 
  Kspace(T a, T tau, T vgmag, T omega, int ntheta, int nphi, const bool full) :
   _length(ntheta*nphi),
@@ -408,6 +410,7 @@ class Kspace
   T getDK3() const {return _totvol;}
   T calcTauTot()
   {   // returns sum(dk3/tau)
+   cout<<"KSP#413: "<<"TAUTOT: "<<endl;
     T tauTot=0.;
     for(int k=0;k<_length;k++)
       {
@@ -498,6 +501,46 @@ class Kspace
       }
   }
 
+  T calcModeTempincell(const int c, const int modeindex)
+  {
+    int cInd(getGlobalIndex(c,0));
+    T esum(0);
+    T sum_num(0);
+    T sum_den(0);
+    T guess(300.0);
+
+    for(int k=0;k<_length;k++)
+      {
+        Tkvol& kv=getkvol(k);
+        const int modenum=kv.getmodenum();
+        T dk3=kv.getdk3();
+          int d = k*modenum+modeindex ;
+          T TPH=calcPhononTemp(c,d,300.0) ;
+          T CPT=calcPhonSpheat(c,d,TPH);
+          sum_num+=TPH*CPT*dk3;
+          sum_den+=CPT*dk3;
+      }
+    guess=sum_num/sum_den;
+    return guess;
+  }
+
+   T calcPhonSpheat(const int c, const int index, T guess)
+  {
+    const int modenum=getkvol(0).getmodenum();
+    const int m=index%modenum;
+    const int k=floor(index/modenum);
+    Tkvol& kv=getkvol(k);
+    Tmode& mode=kv.getmode(m);
+    const T omega=mode.getomega();
+    const T hbar=6.582119e-16;  // (eV s)
+    const T kb=8.617343e-5;  // (eV/K)
+    T Tl=guess;
+    guess=kb*pow((hbar*omega/kb/Tl),2)*
+              exp(hbar*omega/kb/Tl)/pow((exp(hbar*omega/kb/Tl)-1),2);
+    return guess;
+
+  }
+
   T calcModeTemp(T guess, const T e_sum, const T m)
   {
     T e0;
@@ -528,7 +571,8 @@ class Kspace
     T deltaT=1.;
     int iters=0;
     T inguess=guess;
-
+ //   COpts opts;
+    //cout<<"KSP#534: "<<_options.linear<<" "<<_options.verb<<endl;
     while((deltaT>1e-6)&&(iters<10))
       {
 	T e0=mode.calce0(inguess);
@@ -643,6 +687,34 @@ class Kspace
       }
   }
 
+   T getde0taudT(const int c, T Tl, COpts& opts)
+  {
+    const T hbar=6.582119e-16;  // (eV s)
+    T de0taudT=0.;
+    int index=getGlobalIndex(c,0);
+    for(int k=0;k<_length;k++)
+      {
+        Tkvol& kv=getkvol(k);
+        const int modenum=kv.getmodenum();
+        T dk3=kv.getdk3();
+        for(int m=0;m<modenum;m++)
+          {
+            Tmode& mode=kv.getmode(m);
+            if (opts.linear==1)
+            {
+               T b=mode.gettauN();
+               Tvec vg1=mode.getv();
+               T a=vg1[2];
+              (*_Tau)[index]= a*pow(Tl,b); //*300.0/Tl ;
+            }
+            de0taudT+=mode.calcde0dT(Tl)*dk3/_totvol/(*_Tau)[index];
+            index++;
+          }
+      }
+    return de0taudT;
+  }
+
+  
   T getde0taudT(const int c, T Tl)
   {
     const T hbar=6.582119e-16;  // (eV s)
@@ -657,6 +729,12 @@ class Kspace
 	for(int m=0;m<modenum;m++)
 	  {
 	    Tmode& mode=kv.getmode(m);
+         //   if (_options.linear==1)       
+         //  { 
+         //      cout<<"KSP#665: "<<_options.linear<<" "<<_options.verb<<endl;
+          //     T TP=calcPhononTemp(c,k*modenum+m,300.0);  
+        //      (*_Tau)[index]*=300.0/TP;
+      //     }    
 	    //T energy=hbar*mode.getomega();
 	    de0taudT+=mode.calcde0dT(Tl)*dk3/_totvol/(*_Tau)[index];
 	    index++;
@@ -1221,14 +1299,72 @@ class Kspace
   void setResArray(TArrPtr ResPtr) {_residual=ResPtr;}
   void setFASArray(TArrPtr FASPtr) {_FASCorrection=FASPtr;}
   void setTauArray(TArrPtr TauPtr) {_Tau=TauPtr;}
+  void setCTLATArray(TArrPtr CTLATPtr) {_CTLAT=CTLATPtr;}
+  void setebdryArray(TArrPtr ebPtr) {_ebdry=ebPtr;}
+  void setpe0Array(TArrPtr pe0Ptr) {_pe0=pe0Ptr;}
+  void setpeArray(TArrPtr pePtr) {_pe=pePtr;}
+  void setRHSArray(TArrPtr RHSPtr) {_RHS=RHSPtr;}
+  void setMRHSArray(TArrPtr MRHSPtr) {_MRHS=MRHSPtr;}
+  void setPBvecArray(TArrPtr PBvecPtr){ _PBvec=PBvecPtr; } 
+  void setFTLATArray(TArrPtr FTLATPtr) {_FTLAT=FTLATPtr;}  
+  void setMPBvecArray(TArrPtr MPBvecPtr) {_MPBvec=MPBvecPtr; }
+
+  TArray& getPBvecArray(){return *_PBvec;}
+  TArray& getMPBvecArray(){return *_MPBvec;}
+  TArray& getCTLATArray() {return *_CTLAT;}
   TArray& geteArray() {return *_e;}
+  TArray& getebdryArray() { return *_ebdry; }
   TArray& gete0Array() {return *_e0;}
+  TArray& getpeArray() {return *_pe;}
+  TArray& getpe0Array() {return *_pe0;}
   TArray& getSourceArray() {return *_Source;}
   TArray& getInjArray() {return *_injected;}
   TArray& getResArray() {return *_residual;}
   TArray& getFASArray() {return *_FASCorrection;}
   TArray& getTauArray() {return *_Tau;}
+  TArray& getRHSArray() {return *_RHS;}
+  TArray& getMRHSArray() {return *_MRHS;}
+  TArray& getFTLATArray() {return *_FTLAT;}
   const T getTau(const int index) {return (*_Tau)[index];}
+
+  ArrayBase* getMPBvecArrayPy()
+  { return _MPBvec.get(); } 
+  ArrayBase* getPBvecArrayPy()
+  { return _PBvec.get(); }
+ 
+   ArrayBase* getpe0ArrayPy()
+  { return _pe0.get() ;}
+  
+  ArrayBase* getRHSArrayPy()
+  { return _RHS.get() ;}
+  
+   ArrayBase* getMRHSArrayPy()
+  { return _MRHS.get() ;}
+
+   ArrayBase* getpeArrayPy()
+  { return _pe.get() ;}
+
+    ArrayBase* getResArrayPy()
+  { return _residual.get() ;}
+
+  ArrayBase* getebdryArrayPy()
+   {
+    return _ebdry.get();
+   }
+
+  ArrayBase* getCTLATArrayPy()
+  {return _CTLAT.get();}
+
+   ArrayBase* getFTLATArrayPy()
+  {return _FTLAT.get();}
+
+
+   ArrayBase* geteArrayPy()
+  { return _e.get() ;}
+
+   ArrayBase* gete0ArrayPy()
+  { return _e0.get() ;}
+
   void geteCellVals(const int c, TArray& o)
   {
     int start=getGlobalIndex(c,0);
@@ -1275,7 +1411,13 @@ class Kspace
     int start=getGlobalIndex(c,0);
     int end=start+gettotmodes();
     for(int i=start; i<end; i++)
+    {
       Bvec[i-start]-=(*_FASCorrection)[i];
+     if (_options.verb==1) 
+      cout<<"KSP#1325: "<<c<<" "<<i<<" "<<start<<" "<<Bvec[i-start]<<" "<<Bvec[i-start]+(*_FASCorrection)[i]<<" "<<(*_FASCorrection)[i]<<endl; 
+   //   if ((*_FASCorrection)[i]<0)
+     //  cout<<"KSP#1334: "<<c<<" "<<i<<" "<<(*_FASCorrection)[i]<<endl;
+     }
   }
 
   void addFASint(const int c, TArray& Bvec)
@@ -1286,8 +1428,15 @@ class Kspace
       Bvec[i-start]+=(*_FASCorrection)[i];
   }
 
-  void makeFAS() {(*_FASCorrection)-=(*_residual);}
+  void makeFAS() {
 
+  (*_FASCorrection)-=(*_residual);
+//   if (_options.verb==1)
+//  { 
+//   for (int i=0;i<100;i++)
+//     cout<<"KSP1359: "<<i<<" "<<(*_residual)[i]<<" "<<(*_FASCorrection)[i]+(*_residual)[i]<<" "<<(*_FASCorrection)[i]<<endl;
+ // }
+ }
   void syncLocal(const StorageSite& site)
   {
     //package values to be sent/received
@@ -1608,11 +1757,97 @@ class Kspace
     return e;
   }
 
+/*  ArrayBase* getBvecPy()
+  {
+    const int numMeshes=_meshes.size();
+    for(int n=0;n<numMeshes;n++)
+      {
+        const Mesh& mesh=*_meshes[n];
+        Tkspace& kspace=*_kspaces[_MeshKspaceMap[n]];
+        const StorageSite& cells = mesh.getCells();
+        const int numcells = cells.getCount();
+      }
+    TArray* bvec=new TArray(_length);
+
+  } */
+
+  ArrayBase* getKvolsPy()
+  {
+    TArray* Kvols=new TArray(_length);
+    for(int k=0;k<_length;k++)
+     {
+       Tkvol& kvol=getkvol(k);
+       (*Kvols)[k]=kvol.getdk3();
+     }
+    return Kvols;
+  }
+
+
   ArrayBase* getFreqArrayPy()
   {
     TArray* e=new TArray(gettotmodes());
     (*e)=_freqArray;
     return e;
+  }
+
+  ArrayBase* getVgxArrayPy()
+  {
+    TArray* e=new TArray(gettotmodes());
+    int index(0);
+    Tvec vy;
+    for(int k=0;k<_length;k++)
+      {
+        Tkvol& kv=getkvol(k);
+         const int modenum=kv.getmodenum();
+        for(int m=0;m<modenum;m++)
+          {
+            Tmode& mode=kv.getmode(m);
+            vy=mode.getv();
+            (*e)[index]=vy[0];
+            index++;
+          }
+      }
+   return e;
+  }
+
+   ArrayBase* getVgyArrayPy()
+  {
+    TArray* e=new TArray(gettotmodes());
+    int index(0);
+    Tvec vy;
+    for(int k=0;k<_length;k++)
+      {
+        Tkvol& kv=getkvol(k);
+         const int modenum=kv.getmodenum();
+        for(int m=0;m<modenum;m++)
+          {
+            Tmode& mode=kv.getmode(m);
+            vy=mode.getv();
+            (*e)[index]=vy[1];
+            index++;
+          }
+      }
+   return e;
+  }
+
+   ArrayBase* getVgzArrayPy()
+  {
+    TArray* e=new TArray(gettotmodes());
+    int index(0);
+    Tvec vy;
+    for(int k=0;k<_length;k++)
+      {
+        Tkvol& kv=getkvol(k);
+         const int modenum=kv.getmodenum();
+        for(int m=0;m<modenum;m++)
+          {
+            Tmode& mode=kv.getmode(m);
+            vy=mode.getv();
+            (*e)[index]=vy[2];
+            index++;
+          }
+      }
+   return e;
   }
 
   ArrayBase* getTauArrayPy()
@@ -1690,21 +1925,101 @@ class Kspace
   ArrayBase* getSourceArrayPy()
   {return _Source.get();}
 
+
+  void addSource(const int c, TArray& BVec, const T cv, COpts& opts)
+  {
+    if(!(_Source==NULL))
+      {
+      //Default option distributes the heat source equally into all the phonon modes
+	if (opts.SourceType=="Default")
+	{
+  	 T  total_source(0);
+ 	 T temp_value(0);
+	 int cInd=getGlobalIndex(c,0);
+	 int index(0);
+         const T total_k_volume=getDK3();
+         for(int k=0;k<_length;k++)
+          {
+   	    Tkvol& kv=getkvol(k);
+	    const int modenum=kv.getmodenum();
+	    T dk3=kv.getdk3();
+	    for(int m=0;m<modenum;m++)
+	    {
+	     BVec[index]+=(*_Source)[cInd]*cv; //*dk3/total_k_volume;
+	     temp_value=(*_Source)[cInd]*cv*dk3/total_k_volume;
+	     cInd++;
+             index++;
+	     total_source+=temp_value;
+	    }
+           }
+         }
+	else if (opts.SourceType=="FrequencyCutOff")
+	{
+  	 T  total_source(0);
+ 	 T temp_value(0);
+	 int cInd=getGlobalIndex(c,0);
+	 int index(0);
+	 int count(0);
+	 T cutoff(opts["FrequencyCutOff"]);
+         const T total_k_volume=getDK3();
+         //Count the number of modes above the cutoff frequency
+         for(int k=0;k<_length;k++)
+          {
+   	    Tkvol& kv=getkvol(k);
+	    const int modenum=kv.getmodenum();
+	    T dk3=kv.getdk3();
+	    for(int m=0;m<modenum;m++)
+	    {
+	     Tmode& mode=kv.getmode(m);
+	     const T omega=mode.getomega();
+	     if (omega>cutoff)
+	      count++;
+	    }
+          }
+         //Split the source term equally among all the modes above cutoff
+         for(int k=0;k<_length;k++)
+          {
+   	    Tkvol& kv=getkvol(k);
+	    const int modenum=kv.getmodenum();
+	    T dk3=kv.getdk3();
+	    for(int m=0;m<modenum;m++)
+	    {
+	     Tmode& mode=kv.getmode(m);
+	     const T omega=mode.getomega();
+	     if (omega>cutoff)
+		BVec[index]+=(*_Source)[cInd]*cv/dk3*total_k_volume/count; //*dk3/total_k_volume;
+//	     temp_value=(*_Source)[cInd]*cv*dk3/total_k_volume;
+	     //cout << " Source " << (*_Source)[cInd] << endl;
+	     cInd++;
+             index++;
+	     total_source+=temp_value;
+	    }
+          }
+         
+	}
+      }
+  }
+
+/*
   void addSource(const int c, TArray& BVec, const T cv)
   {
     if(!(_Source==NULL))
       {
-	const int beg=getGlobalIndex(c,0);
-	const int fin=getGlobalIndex(c+1,0);
-	int index(0);
-	for(int i=beg;i<fin;i++)
-	  {
-	    BVec[index]+=(*_Source)[i]*cv;
-	    index++;
-	  }
+	T temp_value(0);
+        const int beg=getGlobalIndex(c,0);
+        const int fin=getGlobalIndex(c+1,0);
+        int index(0);
+        for(int i=beg;i<fin;i++)
+          {
+            BVec[index]+=(*_Source)[i]*cv;
+	    temp_value+=(*_Source)[i]*cv;
+            index++;
+          }
+//	cout << "Total Source " << temp_value << endl;
       }
   }
 
+*/
  private:
 
   Kspace(const Kspace&);
@@ -1712,6 +2027,7 @@ class Kspace
   int _length;
   Volvec _Kmesh;
   T _totvol;    //total Kspace volume
+  COpts _options;
   TransmissionMap _transMap;
   DensityOfStates<T>* _DOS;
   ScatteringKernel<T>* _ScattKernel;
@@ -1726,7 +2042,15 @@ class Kspace
   GhostArrayMap _ghostArrays;
   TArray _freqArray;
   RelTimeFun<T> _relFun;
-  
+  TArrPtr _CTLAT;  
+  TArrPtr _ebdry;
+  TArrPtr _pe;
+  TArrPtr _pe0;
+  TArrPtr _RHS;
+  TArrPtr _MRHS;
+  TArrPtr _PBvec; 
+  TArrPtr _FTLAT;
+  TArrPtr _MPBvec;
 };
 
 

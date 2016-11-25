@@ -86,13 +86,7 @@ class COMETDiscretizer
     _eArray(kspace.geteArray()),
     _e0Array(kspace.gete0Array()),
     _resArray(kspace.getResArray()),
-    _PSource(kspace.getSourceArray()),
-    _PBvec(kspace.getPBvecArray()),
-    _MPBvec(kspace.getMPBvecArray()),
-    _RHS(kspace.getRHSArray()),
-    _MRHS(kspace.getMRHSArray()),
-    _FTLAT(kspace.getFTLATArray()),
-    _Tau(kspace.getTauArray())
+    _PSource(kspace.getSourceArray())
     {}
 
   void COMETSolveFine(const int dir,const int level)
@@ -111,7 +105,7 @@ class COMETDiscretizer
     const T newTol=_options.NewtonTol;
     const int maxNew=_options.maxNewton;
     const int minNew=_options.minNewton;
-
+    int clevel=level; 
     const GradMatrix& gradMatrix=GradModelType::getGradientMatrix(_mesh,_geomFields);
     
     for(int c=start;((c<cellcount)&&(c>-1));c+=dir)
@@ -255,6 +249,7 @@ class COMETDiscretizer
     const int cellcount=_cells.getSelfCount();
     int start;
 
+
     if(dir==1)
       start=0;
     if(dir==-1)
@@ -263,17 +258,14 @@ class COMETDiscretizer
     TArray Bvec(totalmodes+1);
     TArray Resid(totalmodes+1);
     TArrow AMat(totalmodes+1);
- //   TArray PBvec(totalmodes+1);
     const T newTol=_options.NewtonTol;
     const int maxNew=_options.maxNewton;
     const int minNew=_options.minNewton;
     TArray& Tl=dynamic_cast<TArray&>(_macro.temperature[_cells]);
-    const int Plevel=_options.PyLevels; 
+    int clevel=level; 
     for(int c=start;((c<cellcount)&&(c>-1));c+=dir)
       {	
-         if (_options.verb==1) 
-          cout<<"CDISC274: "<<c<<" "<<cellcount<<" "<<Plevel<<endl;		
- //       cout<<"CDISC#274: "<<c<<" "<<_eArray[c*totalmodes]<<" "<<_eArray[c*totalmodes+1]<<" "<<_eArray[c*totalmodes+2]<<" "<<_eArray[c*totalmodes+3]<<" "<<endl; 
+		
 	if(_BCArray[c]==0)  //no reflections at all--interior cell or temperature boundary
 	  {
 	    T dt=1;
@@ -282,33 +274,26 @@ class COMETDiscretizer
 	  
 	    while((dt>newTol && NewtonIters<maxNew) || NewtonIters<minNew)
 	      {
+		
 		Bvec.zero();
 		Resid.zero();
 		AMat.zero();
-         //       cout<<"CDISC282: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;	
-		COMETConvectionCoarse(c,AMat,Bvec);
+	        cout<<"CDISC281: "<<cellcount<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[totalmodes]<<endl;
+		COMETConvectionCoarse(c,AMat,Bvec);               
 		COMETCollision(c,&AMat,Bvec);
 		COMETEquilibrium(c,&AMat,Bvec);
-		COMETSource(c,Bvec);
-//                COMETBVEC(c,BVec);  
-      //         cout<<"CDISC286: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl; 
-  //              COMETBVEC(c,Bvec);
-    //            COMETMBVEC(c,Bvec);
+                cout<<"CDISC285: "<<cellcount<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[totalmodes]<<endl;     
+		//COMETSource(c,Bvec);
+    		//cout << "Inside COMETSolveCoarse " << endl;
 
-	 	if(_options.withNormal)
+		if(_options.withNormal)
 		  COMETShifted(c,&AMat,Bvec);
-                if (Plevel>0) {
-                 COMETMGRES(c,Bvec);   	
-                 COMETMGRESM(c,Bvec);
-                 }
-	         if (level>0) 
+		
+		if(level>0)
 		  addFAS(c,Bvec);
-		COMETBVEC(c,Bvec);
-                COMETMBVEC(c,Bvec); 
-           //     cout<<"CDISC#295: "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;
+	         cout<<"CDISC295: "<<cellcount<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[totalmodes]<<endl;	
 		Resid=Bvec;
 		AMat.Solve(Bvec);
-              //  cout<<"CDISC#326: "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[totalmodes-1]<<" "<<Bvec[totalmodes]<<" "<<Resid[0]<<" "<<Resid[1]<<endl; 
 		rscaled=scaledResid(Bvec,c);
 		
 		Distribute(c,Bvec,Resid);
@@ -318,6 +303,7 @@ class COMETDiscretizer
 		NewtonIters++;
 		dt=0.5*fabs(Bvec[totalmodes]/Tl[c])+rscaled*0.5;
 	      }
+
 	  }
 	else if(_BCArray[c]==1) //Implicit reflecting boundary only
 	  {
@@ -329,31 +315,21 @@ class COMETDiscretizer
 		Bvec.zero();
 		Resid.zero();
 		AMatS.zero();
-         //        cout<<"CDISC#319: "<<c<<" "<<_eArray[0]<<" "<<_eArray[1]<<" "<<_eArray[2]<<" "<<_eArray[3]<<" "<<endl; 
-	      //  cout<<"CDISC319: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;	
+		
 		COMETConvection(c,AMatS,Bvec);
 		COMETCollision(c,&AMatS,Bvec);
 		COMETEquilibrium(c,&AMatS,Bvec);
-	        COMETSource(c,Bvec);
-        //        cout<<"CDISC332: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl; 
-     //           COMETBVEC(c,Bvec);
-      //          COMETMBVEC(c,Bvec);
-
-                if (Plevel>0) {
-                 COMETMGRES(c,Bvec);
-                 COMETMGRESM(c,Bvec); 	          
-                }
-                if (level>0)
+		  
+		if(level>0)
 		  addFAS(c,Bvec);
-	        COMETBVEC(c,Bvec);
-                COMETMBVEC(c,Bvec);  
+	       
 		Resid=Bvec;
 		AMatS.Solve(Bvec);
+		
 		Distribute(c,Bvec,Resid);
 		updatee0(c);
 		NewtonIters++;
 		dt=fabs(Bvec[totalmodes]);
-                
 	      }
 	  }
 	else if(_BCArray[c]==2)  //Explicit boundary only
@@ -369,52 +345,24 @@ class COMETDiscretizer
 		Bvec.zero();
 		Resid.zero();
 		AMat.zero();
-         //      cout<<"CDISC349: "<<" "<<level<<" "<<c<<" "<<_eArray[c*4]<<" "<<_eArray[c*4+1]<<" "<<_eArray[c*4+2]<<" "<<_eArray[c*4+3]<<" "<<endl;	
-           //     cout<<"CDISC348: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;   
-          //     cout<<"CDISC349: "<<" "<<level<<" "<<c<<" "<<_e0Array[c*4]<<" "<<_e0Array[c*4+1]<<" "<<_e0Array[c*4+2]<<" "<<_e0Array[c*4+3]<<" "<<endl; 
+		
 		COMETConvectionCoarse(c,AMat,Bvec);
-               if (_options.verb==1)
-               cout<<"CDISC350: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl; 
 		COMETCollision(c,&AMat,Bvec);
-               if (_options.verb==1)
-               cout<<"CDISC351: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;
 		COMETEquilibrium(c,&AMat,Bvec);
-                if (_options.verb==1)
-                cout<<"CDISC353: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl; 
-		COMETSource(c,Bvec);
-    		//cout << "Inside COMETSolveCoarse Explicit" << endl
-    //		cout<<"CDISC#357: "<<c<<" "<<_eArray[0]<<" "<<_eArray[1]<<" "<<_eArray[2]<<" "<<_eArray[3]<<" "<<endl;
-                if (_options.verb==1)
-	        cout<<"CDISC355: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl; 	
-          //      COMETBVEC(c,Bvec);
-          //      COMETMBVEC(c,Bvec); 
-                if (Plevel>0)
-                {   
-                  COMETMGRES(c,Bvec); 
-                  COMETMGRESM(c,Bvec);
-                } 
+		//COMETSource(c,Bvec);
+    		//cout << "Inside COMETSolveCoarse Explicit" << endl;
+		
 		if(_options.withNormal)
 		  COMETShifted(c,&AMat,Bvec);
-                 if (_options.verb==1) 
-		cout<<"CDISC358: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;
-		if ((level>0)) // && (dir>0)) 
+		
+		if(level>0)
 		  addFAS(c,Bvec);
-               if (_options.verb==1)      
-                cout<<"CDISC361: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;
-		COMETBVEC(c,Bvec);
-                COMETMBVEC(c,Bvec); 
+		
 		Resid=Bvec;
-         //       cout<<"CDISC#390: "<<c<<" "<<_eArray[c*totalmodes]<<" "<<_eArray[c*totalmodes+1]<<" "<<_eArray[c*totalmodes+2]<<" "<<_eArray[c*totalmodes+3]<<" "<<endl;
-                if (_options.verb==1) 
-                cout<<"CDISC391: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;   
 		AMat.Solve(Bvec);
 		rscaled=scaledResid(Bvec,c);
-           //     cout<<"CDISC#393: "<<c<<" "<<_eArray[c*totalmodes]<<" "<<_eArray[c*totalmodes+1]<<" "<<_eArray[c*totalmodes+2]<<" "<<_eArray[c*totalmodes+3]<<" "<<endl;
-    //            cout<<"CDISC369: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;
-      //          cout<<"CDISC370: "<<" "<<level<<" "<<c<<" "<<Resid[0]<<" "<<Resid[1]<<" "<<Resid[2]<<" "<<Resid[3]<<" "<<Resid[totalmodes]<<endl;
+
 		Distribute(c,Bvec,Resid);
-                if (_options.verb==1)   
-                cout<<"CDISC#397: "<<c<<" "<<_eArray[c*totalmodes]<<" "<<_eArray[c*totalmodes+1]<<" "<<_eArray[c*totalmodes+2]<<" "<<_eArray[c*totalmodes+3]<<" "<<endl;  
 		dt=0.5*fabs(Bvec[totalmodes]/Tl[c])+0.5*rscaled;
 		updatee0(c);
 		updateGhostCoarse(c);
@@ -438,21 +386,10 @@ class COMETDiscretizer
 		COMETConvection(c,AMatS,Bvec);
 		COMETCollision(c,&AMatS,Bvec);
 		COMETEquilibrium(c,&AMatS,Bvec);
-		COMETSource(c,Bvec);
-             //   cout<<"CDISC418: "<<" "<<level<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;
-//                COMETBVEC(c,Bvec);
-  //              COMETMBVEC(c,Bvec);
-                if (Plevel>0)
-                {
-                 COMETMGRES(c,Bvec);
-                 COMETMGRESM(c,Bvec);
-                }
-   
-	        if (level>0) 
+		
+		if(level>0)
 		  addFAS(c,Bvec);
-	     
-                COMETBVEC(c,Bvec);  
-                COMETMBVEC(c,Bvec); 
+	       
 		Resid=Bvec;
 		AMatS.Solve(Bvec);
 		
@@ -488,7 +425,7 @@ class COMETDiscretizer
     const T newTol=_options.NewtonTol;
     const int maxNew=_options.maxNewton;
     const int minNew=_options.minNewton;
-    
+    int clevel=level;
     for(int c=start;((c<cellcount)&&(c>-1));c+=dir)
       {	
 	
@@ -920,8 +857,7 @@ class COMETDiscretizer
 		const int count=mode.getIndex();
 		const VectorT3 vg=mode.getv();
 		flux=vg[0]*Af[0]+vg[1]*Af[1]+vg[2]*Af[2];
-         //  cout<<"CDISC#896:"<<j<<" "<<cell0<<" "<<cell1<<" "<<_cellCoords[cell0][0]<<" "<<_cellCoords[cell1][0]<<" "<<_cellCoords[cell0][1]<<" "<<_cellCoords[cell1][1]<<" "<<_kspace.getGlobalIndex(cell0,count-1)<<endl;
-//	   cout<<"CDISC#897: "<<neibcount<<" "<<flux<<" "<<count-1<<" "<<_eArray[_kspace.getGlobalIndex(cell0,count-1)]<<" "<<_eArray[_kspace.getGlobalIndex(cell1,count-1)]<<" "<<_kspace.getGlobalIndex(cell1,count-1)<<endl;	
+		
 		if(flux>T_Scalar(0))
 		  {
 		    Amat.getElement(count,count)+=flux;
@@ -929,7 +865,6 @@ class COMETDiscretizer
 		  }
 		else
 		  BVec[count-1]-=flux*_eArray[_kspace.getGlobalIndex(cell1,count-1)];
-  //               cout<<"CDISC#913: "<<cell0<<" "<<j<<" "<<count-1<<" "<<k<<" "<<m<<" "<<BVec[count-1]<<endl;
 	      }
 	  }
 
@@ -976,7 +911,6 @@ class COMETDiscretizer
 		    Field& efield=mode.getfield();
 		    TArray& eArray=dynamic_cast<TArray&>(efield[_cells]);
 		    flux=vg[0]*Af[0]+vg[1]*Af[1]+vg[2]*Af[2];
-                    cout<<"CDISC#917: "<<cell<<" "<<eArray[0]<<endl; 
 		    if(flux>T_Scalar(0))
 		      {
 			Amat(count,count)-=flux;
@@ -1083,19 +1017,16 @@ class COMETDiscretizer
 	  {
 	    Tmode& mode=kvol.getmode(m);
 	    const int count=mode.getIndex();
-	  //  T tau=_kspace.getTau(cellIndex);
-           // if (_options.linear==1)
-          //  { 
-          //   T TP=_kspace.calcPhononTemp(cell,k*numModes+m,300.0);
-         //    tau=tau*300.0/310.0;
-          //  }
+	    const T tau=_kspace.getTau(cellIndex);
 	    T de0dT=mode.calcde0dT(Tlold[cell]);
-	    coeff=_cellVolume[cell]/_Tau[k*numModes+m];
+	    coeff=_cellVolume[cell]/tau;
 	    Amat->getElement(count,order)-=coeff*de0dT;
 	    Amat->getElement(count,count)+=coeff;
-          //  cout<<"CDISC1068: "<<cell<<" "<<k<<" "<<m<<" "<<cellIndex<<" "<<coeff<<" "<<_eArray[cellIndex]<<" "<<_e0Array[cellIndex]<<endl;
 	    BVec[count-1]-=coeff*_eArray[cellIndex];
-	    BVec[count-1]+=coeff*_e0Array[cellIndex];
+	    BVec[count-1]+=coeff*_e0Array[cellIndex]+(_PSource)[m+k*numModes+klen*numModes*cell]*_cellVolume[cell];
+         //   if (level==0)
+           //  BVec[count-1]+=(_PSource)[m+k*numModes+klen*numModes*cell]*_cellVolume[cell]; 
+            
 	    cellIndex++;
 	  }
       }
@@ -1112,8 +1043,8 @@ class COMETDiscretizer
     T coeff;
     const T DK3=_kspace.getDK3();
     int cellIndex=_kspace.getGlobalIndex(cell,0);
-
-//    cout<<"CDISC#1048: "<<cell<<" "<<_eArray[0]<<" "<<_eArray[1]<<" "<<_eArray[2]<<" "<<_eArray[3]<<" "<<endl; 
+    const T hbar=6.582119e-16;  // (eV s)
+    
     for(int k=0;k<klen;k++)
       {
 	Tkvol& kvol=_kspace.getkvol(k);
@@ -1123,115 +1054,23 @@ class COMETDiscretizer
 	  {
 	    Tmode& mode=kvol.getmode(m);
 	    const int count=mode.getIndex();
-	   // T tau=_kspace.getTau(cellIndex);
-          //   if (_options.linear==1)
-          //  {
-          //    T TP=_kspace.calcPhononTemp(cell,k*numModes+m,300.0);
-          //    tau=tau*300.0/TP;
-           // }
+	    const T tau=_kspace.getTau(cellIndex);
 	    //const T energy=mode.getomega()*hbar;
-	    coeff=(dk3/DK3)/_Tau[k*numModes+m]; //tau
+	    coeff=(dk3/DK3)/tau;
 	    Amat->getElement(order,count)-=coeff;
-        //   cout<<"CDISC1101: "<<cell<<" "<<k<<" "<<m<<" "<<order<<" "<<count<<" "<<coeff<<" "<<tauTot<<" "<<cellIndex<<" "<<_eArray[cellIndex]<<" "<<_e0Array[cellIndex]<<" "<<BVec[totalmodes]<<endl; 
 	    BVec[totalmodes]+=coeff*_eArray[cellIndex];
-       //     cout<<"CDISC1106: "<<cell<<" "<<k<<" "<<m<<" "<<BVec[totalmodes]<<endl;
 	    BVec[totalmodes]-=coeff*_e0Array[cellIndex];
-         //    cout<<"CDISC1108: "<<cell<<" "<<k<<" "<<m<<" "<<BVec[totalmodes]<<endl; 
 	    cellIndex++;
 	  }
       }
     Amat->getElement(order,order)=tauTot;
   }
 
-  void COMETBVEC(const int cell, TArray& BVec)
-  {
-    const int klen=_kspace.getlength();
-    const int totalmodes=_kspace.gettotmodes();
-
-    int cellIndex=_kspace.getGlobalIndex(cell,0);
-    for(int k=0;k<klen;k++)
-      {
-        Tkvol& kvol=_kspace.getkvol(k);
-        const int numModes=kvol.getmodenum(); 
-        for(int m=0;m<numModes;m++)
-          {
-         //   Tmode& mode=kvol.getmode(m);
-         //   const int count=mode.getIndex();
-            (_PBvec)[cell*(totalmodes)+k*numModes+m]=BVec[k*numModes+m];
-            cellIndex++;
-          }
-      }
-//      (_PBvec)[cell*(order)+totalmodes]= BVec[totalmodes]; 
-   }
- 
-  void COMETMBVEC(const int cell, TArray& BVec)
-  {
-    const int totalmodes=_kspace.gettotmodes();
-
-    (_MPBvec)[cell]= BVec[totalmodes];
-
-  }
-
   void COMETSource(const int cell, TArray& BVec)
-  
-//    _kspace.addSource(cell, BVec,_cellVolume[cell],_options); 
-   {
-    const int klen=_kspace.getlength();
-
-
-    int cellIndex=_kspace.getGlobalIndex(cell,0);
-
-    for(int k=0;k<klen;k++)
-      {
-        Tkvol& kvol=_kspace.getkvol(k);
-        const int numModes=kvol.getmodenum();
-        for(int m=0;m<numModes;m++)
-          {
-            Tmode& mode=kvol.getmode(m);
-            const int count=mode.getIndex();
-       //     Amat->getElement(count,count)+=coeff;
-         //   BVec[count-1]-=coeff*_eArray[cellIndex];
-       //    cout<<"CDISC1156: "<<cell<<" "<<k<<" "<<m<<" "<<count<<" "<<cellIndex<<" "<<(_PSource)[cellIndex]<<endl;    
-            BVec[count-1]+=(_PSource)[cellIndex]*_cellVolume[cell];
-            cellIndex++;
-          }
-      }
-  //   BVec[order-1]+=(_RHS)[cell*order+totalmodes];
-   }   
-  
-  void COMETMGRES(const int cell, TArray& BVec)
   {
-     const int klen=_kspace.getlength();
-
-    int cellIndex=_kspace.getGlobalIndex(cell,0);
-
-    for(int k=0;k<klen;k++)
-      {
-        Tkvol& kvol=_kspace.getkvol(k);
-        const int numModes=kvol.getmodenum();
-        for(int m=0;m<numModes;m++)
-          {
-            Tmode& mode=kvol.getmode(m);
-            const int count=mode.getIndex();
-            BVec[count-1]+=(_RHS)[cellIndex];
-            cellIndex++;
-             if (_options.verb==1)
-           cout<<"CDISC#1191: "<<cell<<" "<<k<<" "<<m<<" "<<cellIndex-1<<" "<<count-1<<" "<<BVec[count-1]-(_RHS)[cellIndex]<<" "<<(_RHS)[cellIndex]<<" "<<BVec[count-1]<<endl;  
-          }
-      }
- //    BVec[order-1]+=(_RHS)[cell*order+totalmodes];
-   }
-
-   void COMETMGRESM(const int cell, TArray& BVec)
-  {
-
-    const int totalmodes=_kspace.gettotmodes();
- //   cout<<"RESM: "<<cell<<" "<<(_MRHS)[cell]<<endl;
-    BVec[totalmodes]+=(_MRHS)[cell];
-    if (_options.verb==1)
-    cout<<"CDISC#1205: "<<cell<<" "<<(_MRHS)[cell]<<" "<<BVec[totalmodes]<<endl;
-   }
-
+    _kspace.addSource(cell, BVec,_cellVolume[cell],_options);
+    
+  }
 
   void COMETFullScatt(const int cell, TArray& s, TArray& BVec)
   {
@@ -1255,12 +1094,7 @@ class COMETDiscretizer
 	for(int m=0;m<numModes;m++)
 	  {
 	    Tmode& mode=kvol.getmode(m);
-           // if (_options.linear==1)
-           // {
-             // T TP=_kspace.calcPhononTemp(cell,k*numModes+m,300.0);
-           //   tau=tau*300.0/TP;
-           // }
-
+	    const T tau=_kspace.getTau(cellIndex);
 	    const int count=mode.getIndex();
 	    //const T coeff=_cellVolume[cell]/tau;
 
@@ -1377,23 +1211,18 @@ class COMETDiscretizer
 	  {
 	    Tmode& mode=kvol.getmode(m);
 	    const int count=mode.getIndex()-1;
-        //     cout<<"RCELL#1260: "<<cell<<" "<<k<<" "<<m<<" "<<count<<" "<<_eArray[cellIndex]<<" "<<_resArray[cellIndex]<<" "<<_resArray[totalmodes]<<" "<<Rvec[totalmodes]<<" "<<endl;
-        //     cout<<"RCELL#1261: "<<cell<<" "<<k<<" "<<m<<" "<<count<<" "<<-Rvec[count]<<" "<<BVec[count]<<" "<<Rvec[totalmodes]<<" "<<endl; 
 	    _eArray[cellIndex]+=BVec[count];
 	    _resArray[cellIndex]=-Rvec[count];
-       //   cout<<"RCELL#1263: "<<cell<<" "<<k<<" "<<m<<" "<<count<<" "<<_eArray[cellIndex]-BVec[count]<<" "<<BVec[count]<<" "<<_eArray[cellIndex]<<" "<<_resArray[cellIndex]<<" "<<_resArray[totalmodes]<<" "<<Rvec[totalmodes]<<" "<<endl;   
 	    cellIndex++;
 	  }
-      }    
+      }
+    
     TArray& TlArray=dynamic_cast<TArray&>(_macro.temperature[_cells]);
     TlArray[cell]+=BVec[totalmodes];
     TArray& deltaTArray=dynamic_cast<TArray&>(_macro.deltaT[_cells]);
     deltaTArray[cell]=BVec[totalmodes];
     TArray& TlResArray=dynamic_cast<TArray&>(_macro.TlResidual[_cells]);
-//    cout<<"CDISC#1271: "<<cell<<" "<<Rvec[totalmodes]<<" "<<TlResArray[cell]<<endl; 
-    TlResArray[cell]=-Rvec[totalmodes];  
-  //  cout<<"CDISC#1273: "<<cell<<" "<<Rvec[totalmodes]<<" "<<TlResArray[cell]<<endl;   
-    (_FTLAT)[cell]=TlArray[cell];
+    TlResArray[cell]=-Rvec[totalmodes];
   }
 
   void findResidFine()
@@ -1411,7 +1240,7 @@ class COMETDiscretizer
     ResidSum.zero();
     Bsum.zero();
     Dummy.zero();
-
+   // int clevel=level;
     GradMatrix& gradMatrix=GradModelType::getGradientMatrix(_mesh,_geomFields);
     
     for(int c=0;c<cellcount;c++)
@@ -1499,7 +1328,6 @@ class COMETDiscretizer
   {
     const int cellcount=_cells.getSelfCount();
     const int totalmodes=_kspace.gettotmodes();
-
     TArray ResidSum(totalmodes+1);
     TArray Bsum(totalmodes+1);
     T ResidScalar=0.;
@@ -1511,7 +1339,7 @@ class COMETDiscretizer
     ResidSum.zero();
     Bsum.zero();
     Dummy.zero();
-  //  cout<<"CDISC#1384: "<<endl; 
+    //int clevel=level;
     for(int c=0;c<cellcount;c++)
       {	
 	Bvec.zero();
@@ -1525,31 +1353,15 @@ class COMETDiscretizer
 
 	    AMat.zero();
 
-	    COMETConvectionCoarse(c,AMat,Bvec);
-            if (_options.verb==1)
-                cout<<"CDISC1507: "<<cellcount<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;	
+	    COMETConvectionCoarse(c,AMat,Bvec);	
 	    COMETCollision(c,&AMat,Bvec);
-            if (_options.verb==1)
-                cout<<"CDISC1510: "<<cellcount<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl; 
 	    COMETEquilibrium(c,&AMat,Bvec);
-            if (_options.verb==1)
-                cout<<"CDISC1513: "<<cellcount<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl; 
 	    COMETSource(c,Bvec);
-	   // cout << "findResidCoarse#1409: " <<c<<" "<<_BCArray[c]<< endl;
-        //    if (Plevel>0)
-          //  { 
-            //  COMETMGRES(c,Bvec);
-	   //    COMETMGRESM(c,Bvec);
-           //  }
-            if (_options.verb==1)
-                cout<<"CDISC1516: "<<cellcount<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;              
+	 //   cout << "findResidCoarse " << endl;
+	    
 	    if(plusFAS)
 	      addFAS(c,Bvec);
-            if (_options.verb==1)
-                cout<<"CDISC1519: "<<cellcount<<" "<<c<<" "<<Bvec[0]<<" "<<Bvec[1]<<" "<<Bvec[2]<<" "<<Bvec[3]<<" "<<Bvec[totalmodes]<<endl;
 
-            COMETBVEC(c,Bvec);
-            COMETMBVEC(c,Bvec); 
 	    traceSum+=AMat.getTraceAbs();
 	    
 	    Resid=Bvec;
@@ -1572,20 +1384,14 @@ class COMETDiscretizer
 	  {
 	    TSquare AMatS(totalmodes+1);
 	    AMatS.zero();
-	   // cout << "findResidCoarse#1436: " <<c<<" "<<_BCArray[c]<<endl;
+	    
 	    COMETConvection(c,AMatS,Bvec);	
 	    COMETCollision(c,&AMatS,Bvec);
 	    COMETEquilibrium(c,&AMatS,Bvec);
-	    COMETSource(c,Bvec);    
-          //  if (Plevel>0)
-         //   {  
-         //     COMETMGRES(c,Bvec);
-         //    COMETMGRESM(c,Bvec); 
-          //  }
+	    
 	    if(plusFAS)
 	      addFAS(c,Bvec);
-            COMETBVEC(c,Bvec);
-            COMETMBVEC(c,Bvec); 
+
 	    traceSum+=AMatS.getTraceAbs();
 	    Resid=Bvec;
 	    Bvec.zero();
@@ -1639,7 +1445,7 @@ class COMETDiscretizer
     ResidSum.zero();
     Bsum.zero();
     Dummy.zero();
-    
+    //int clevel=level;
     for(int c=0;c<cellcount;c++)
       {	
 	Bvec.zero();
@@ -1815,8 +1621,6 @@ class COMETDiscretizer
     _kspace.addFAS(c,bVec);
     TArray& fasArray=dynamic_cast<TArray&>(_macro.TlFASCorrection[_cells]);
     bVec[totmodes]-=fasArray[c];
-    if (_options.verb==1)
-    cout<<"CDISC#1672: "<<c<<" "<<bVec[totmodes]<<" "<<bVec[totmodes]+fasArray[c]<<" "<<fasArray[c]<<endl;
   }
 
   void updatee0()
@@ -1856,13 +1660,7 @@ class COMETDiscretizer
 	  {
 	    Tmode& mode=kvol.getmode(m);
 	    _e0Array[cellIndex]=mode.calce0(Tl[c]);
-//	    _kspace.updateTau(c,Tl[c]);
-            if (_options.linear==1)
-            {
-            // T TP=_kspace.calcPhononTemp(c,k*numModes+m,300.0);
-             (_Tau)[k*numModes+m]*=0.9;
-            }
- 
+	    _kspace.updateTau(c,Tl[c]);
 	    cellIndex++;
 	  }
       }
@@ -2019,6 +1817,7 @@ class COMETDiscretizer
 	    const int cell2start=_kspace.getGlobalIndex(cell2,0);
 	    int cellIndex=_kspace.getGlobalIndex(cell,0);
 	    int cell2Index=_kspace.getGlobalIndex(cell2,0);
+	    vanLeer vl;
 
 	    //first loop to sum up the diffuse reflection
 	    for(int k=0;k<klen;k++)
@@ -2382,13 +2181,6 @@ class COMETDiscretizer
   TArray& _e0Array;
   TArray& _resArray;
   TArray& _PSource;  
-  TArray& _PBvec;
-  TArray& _MPBvec;
-  TArray& _RHS;
-  TArray& _MRHS;
-  TArray& _FTLAT;
-  TArray& _Tau;
-
 };
 
 

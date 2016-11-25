@@ -147,19 +147,13 @@ class COMETModel : public Model
 	 VectorT3 lamTemp;
 
 	 // set micro parameters
-	 
+	 //cout<<"Allocating Arrays..."<<endl;
 	 shared_ptr<TArray> eArray(new TArray(numcells*kcount));
 	 shared_ptr<TArray> e0Array(new TArray(numcells*kcount));
-         shared_ptr<TArray> PBvecArray(new TArray(numcells*(kcount)));
-         shared_ptr<TArray> MPBvecArray(new TArray(numcells));
 	 shared_ptr<TArray> ResidArray(new TArray(numcells*kcount));
 	 shared_ptr<TArray> tauArray(new TArray(numcells*kcount));
-         shared_ptr<TArray> FTLATArray(new TArray(numcells));
 	 kspace.seteArray(eArray);
-         kspace.setFTLATArray(FTLATArray);
 	 kspace.sete0Array(e0Array);
-         kspace.setPBvecArray(PBvecArray);
-         kspace.setMPBvecArray(MPBvecArray); 
 	 kspace.setResArray(ResidArray);
 	 kspace.setTauArray(tauArray);
 
@@ -177,9 +171,6 @@ class COMETModel : public Model
              shared_ptr<TArray> RHSArray(new TArray(numcells*kcount));
              RHSArray->zero();
              kspace.setRHSArray(RHSArray);
-             shared_ptr<TArray> MRHSArray(new TArray(numcells));
-             MRHSArray->zero();
-             kspace.setMRHSArray(MRHSArray); 
              shared_ptr<TArray> peArray(new TArray(numcells*kcount));
              peArray->zero();
              kspace.setpeArray(peArray);
@@ -225,7 +216,6 @@ class COMETModel : public Model
 	 
 	 for(int c=0;c<numcells;c++)
 	   {
-             (*FTLATArray)[c]=Tinit; 
 	     int cellIndex=kspace.getGlobalIndex(c,0);
 	     for (int k=0;k<numK;k++)
 	       {
@@ -246,12 +236,11 @@ class COMETModel : public Model
 		     (*eArray)[cellIndex]=einit;
 		     (*e0Array)[cellIndex]=einit;
 		     (*ResidArray)[cellIndex]=0.;
-                     (*PBvecArray)[cellIndex]=0.0;
 		     (*tauArray)[cellIndex]=tau;
 		     cellIndex++;
 		   }
 	       }
-//	     kspace.updateTau(c,Tinit);
+	     kspace.updateTau(c,Tinit);
 	   }
 	 
 	 shared_ptr<TArray> TlResidCell(new TArray(numcells));
@@ -281,15 +270,6 @@ class COMETModel : public Model
 	     FaceGroup& fg = *fgPtr;
 	     if(fg.id>0)
 	       {
-                 if(_bcMap[fg.id]->bcType == "nullpy")
-                   {
-                     const StorageSite& faces = fg.site;
-                     const int faceCount=faces.getCount();
-                     const int offSet=faces.getOffset();
-                      for(int i=offSet;i<offSet+faceCount;i++)
-                       BCfArray[i]=5;
-                   }
- 
 		 if(_bcMap[fg.id]->bcType == "reflecting")
 		   {
 		     const StorageSite& faces = fg.site;
@@ -515,7 +495,6 @@ class COMETModel : public Model
      //cout<<"Interfaces Complete..."<<endl;
      
      initializeTemperatureBoundaries();
-     initializeInterfaceBoundaries();
      _residual=updateResid(false);
 
      if(_options.DomainStats=="Loud")
@@ -536,38 +515,8 @@ class COMETModel : public Model
    void inite()
   {
     sete0Py();
-    updateResid(false);
-    const int numMeshes = _meshes.size();
-    for (int n=0; n<numMeshes; n++)
-      {
-        const Mesh& mesh=*_meshes[n];
-        Tkspace& kspace=*_kspaces[_MeshKspaceMap[n]];
-        const StorageSite& cells=mesh.getCells();
-        const int ncells=cells.getSelfCount();
-        TArray& TLM=kspace.getMRHSArray();
-        TArray& TLA=kspace.getRHSArray();
-        TArray& TRES=kspace.getResArray();
-        TArray& resArray=dynamic_cast<TArray&>(_macro.TlResidual[cells]);
-    //    TArray& fasArray=dynamic_cast<TArray&>(_macro.TlFASCorrection[cells]);
-     //    for (int c=0;c<ncells;c++)
-      //    {
-       //     TLM[c]=TLM[c]+resArray[c];
-      //    }
-        if (_options.verb==1) 
-          {
-              for (int c=0;c<ncells;c++)
-               cout<<"CMODEL#538: "<<" "<<ncells<<" "<<c<<" "<<TLM[c]<<" "<<resArray[c]<<" "<<TLM[c]+resArray[c]<<endl;
-          }
-        if (_options.PyLevels==1) {
-         TLM+=resArray;
-         TLA+=TRES;
-         }
-        if (_options.verb==1) {
-      cout<<"CM#539A: "<<" "<<TLA[0]<<" "<<TLA[1]<<" "<<TLA[2]<<" "<<TLA[3]<<" "<<TLA[4]<<" "<<TLA[5]<<" "<<TLA[6]<<" "<<TLA[7]<<" "<<TLA[8]<<" "<<TLA[9]<<" "<<TLA[10]<<" "<<TLA[11]<<endl;
-      cout<<"CM#539B: "<<" "<<TRES[0]<<" "<<TRES[1]<<" "<<TRES[2]<<" "<<TRES[3]<<" "<<TRES[4]<<" "<<TRES[5]<<" "<<TRES[6]<<" "<<TRES[7]<<" "<<TRES[8]<<" "<<TRES[9]<<" "<<TRES[10]<<" "<<TRES[11]<<endl;
-      }
-    }
   }
+
   void sete0Py()
  {
    const int numMeshes = _meshes.size();
@@ -577,47 +526,16 @@ class COMETModel : public Model
         Tkspace& kspace=*_kspaces[_MeshKspaceMap[n]];
         const StorageSite& cells=mesh.getCells();
         const int cellCount=cells.getSelfCount();
-        const int TcellCount=cells.getCount();
         TArray& e0Array=kspace.gete0Array();
         TArray& eArray=kspace.geteArray();
         const int klen=kspace.getlength();
         TArray& CTLAT=kspace.getCTLATArray();
-        TArray& FTLAT=kspace.getFTLATArray(); 
         TArray& PE=kspace.getpeArray();
         TArray& PE0=kspace.getpe0Array();
         shared_ptr<TArray> TLcell(new TArray(cellCount));
-        TArray& resArray=dynamic_cast<TArray&>(_macro.TlResidual[cells]);
-       // TArray& fasArray=dynamic_cast<TArray&>(_macro.TlFASCorrection[cells]);  
-    //    cout<<"TLAT TEST0: "<<FTLAT[0]<<" "<<FTLAT[5]<<" "<<FTLAT[10]<<" "<<FTLAT[15]<<" "<<FTLAT[20]<<" "<<FTLAT[25]<<" "<<FTLAT[30]<<endl;
-    //    cout<<"LATCALC TEST1: "<<kspace.calcLatTemp(0)<<" "<<kspace.calcLatTemp(5)<<" "<<kspace.calcLatTemp(10)<<" "<<kspace.calcLatTemp(15)<<" "<<kspace.calcLatTemp(20)<<" "<<kspace.calcLatTemp(25)<<endl;
-    //    cout<<"TLAT TEST1: "<<(*TLcell)[0]<<" "<<(*TLcell)[5]<<" "<<(*TLcell)[10]<<" "<<(*TLcell)[15]<<" "<<(*TLcell)[20]<<" "<<(*TLcell)[25]<<" "<<(*TLcell)[30]<<endl;
-        const VectorT3Array& coords=dynamic_cast<const VectorT3Array&>(_geomFields.coordinate[cells]);
-       if (_options.directt==1)
-        {
-         for(int c=0;c<cellCount;c++)
+        for(int c=0;c<cellCount;c++)
           {
-          //   const T TLat=CTLAT[c];
-             (*TLcell)[c]=FTLAT[c];
-              int cellIndex=kspace.getGlobalIndex(c,0);
-              for(int k=0;k<klen;k++)
-              {
-                Tkvol& kvol=kspace.getkvol(k);
-                const int numModes=kvol.getmodenum();
-                for(int m=0;m<numModes;m++)
-                { 
-                  Tmode& mode=kvol.getmode(m);
-                  e0Array[cellIndex]=mode.calce0(FTLAT[c]); 
-                  cellIndex++;
-                } 
-             }
-          }
-         } 
-         //cout <<"CMODEL#597: "<<cellCount<<" "<<TcellCount<<endl;
-        if (_options.direct==1)
-        {
-         for (int c=0;c<cellCount;c++)
-          {
-        //     const T TLat=CTLAT[c];
+            const T TLat=CTLAT[c];
             int cellIndex=kspace.getGlobalIndex(c,0);
             for(int k=0;k<klen;k++)
               {
@@ -625,64 +543,15 @@ class COMETModel : public Model
                 const int numModes=kvol.getmodenum();
                 for(int m=0;m<numModes;m++)
                  {
-             //       (*TLcell)[c]=TLat;
+                    (*TLcell)[c]=TLat;
                     Tmode& mode=kvol.getmode(m);
-                  //  if (c<25)
-         //           e0Array[cellIndex]=mode.calce0(TLat);
+                    e0Array[cellIndex]=PE0[cellIndex]; //mode.calce0(TLat);
                     eArray[cellIndex]=PE[cellIndex]; //mode.calce0(TLat);
                     cellIndex++;
-               }
-              }
-          }
-        }   
-         _macro.temperature.addArray(cells,TLcell);
-  //        cout<<"CPE0573: "<<endl;  
-          foreach(const FaceGroupPtr fgPtr, mesh.getBoundaryFaceGroups())
-          {
-            const FaceGroup& fg = *fgPtr;
-            if(fg.id>0)
-              {
-                const StorageSite& faces = fg.site;
-                const COMETBC<T>& bc = *_bcMap[fg.id];
-                const int nFaces=faces.getCount();
-                const CRConnectivity& faceCells=mesh.getFaceCells(faces);
-                const Field& areaField=_geomFields.area;
-                const VectorT3Array& faceArea=dynamic_cast<const VectorT3Array&>(areaField[faces]);
-                if(bc.bcType=="nullpy")
-                {
-                   for (int f=0;f<nFaces;f++)
-                 {
-                 const int c0 = faceCells(f,0);
-                 const int c1 = faceCells(f,1);
-                 for (int k=0;k<klen;k++)
-                 {
-                   Tkvol& kv=kspace.getkvol(k);
-                   int numM=kv.getmodenum();
-                   for (int m=0;m<numM;m++)
-                   {
-                     Tmode& mode=kv.getmode(m);
-                     VectorT3 vg = mode.getv();
-                     const int index=mode.getIndex()-1;
-                     const VectorT3 en =faceArea[f];
-                     const T vg_dot_en = vg[0]*en[0]+vg[1]*en[1]+vg[2]*en[2];
-                     const int c0ind=kspace.getGlobalIndex(c0,index);
-                     const int c1ind=kspace.getGlobalIndex(c1,index);
-                     if (vg_dot_en > T_Scalar(0.0))
-                     {
-                      eArray[c1ind]=eArray[c0ind];
-                     }
-                    if (vg_dot_en < T_Scalar(0.0))
-                     {
-                       eArray[c1ind]=PE[c1ind]; // PE[c1ind];
-                  //    TlArray[c1]=0.0;
-                     }
-                  }
                 }
-             }
-           }
-      }
-    } 
-        
+              }
+         }
+         _macro.temperature.addArray(cells,TLcell);
     }
  }
                     
@@ -874,7 +743,6 @@ class COMETModel : public Model
 
   void initCoarse()
   {
-//    cout<<"CMODEL#750: "<<endl;
     const int numMeshes=_meshes.size();
     const T Tinit=_options["initialTemperature"];
 
@@ -886,25 +754,19 @@ class COMETModel : public Model
 	 const StorageSite& cells=mesh.getCells();
 	 const int numcells=cells.getCount();
 	 const int kcount=kspace.gettotmodes();
-         const int NCells=cells.getSelfCount();
+
 	 shared_ptr<TArray> eArray(new TArray(numcells*kcount));
 	 shared_ptr<TArray> e0Array(new TArray(numcells*kcount));
 	 shared_ptr<TArray> ResidArray(new TArray(numcells*kcount));
 	 shared_ptr<TArray> InjArray(new TArray(numcells*kcount));
 	 shared_ptr<TArray> FASArray(new TArray(numcells*kcount));
 	 shared_ptr<TArray> tauArray(new TArray(numcells*kcount));
-         shared_ptr<TArray> PBvecArray(new TArray(numcells*(kcount)));
-         shared_ptr<TArray> MPBvecArray(new TArray(numcells));
-         shared_ptr<TArray> FTLATArray(new TArray(numcells));
 	 kspace.seteArray(eArray);
 	 kspace.sete0Array(e0Array);
 	 kspace.setResArray(ResidArray);
-         kspace.setPBvecArray(PBvecArray);
-         kspace.setMPBvecArray(MPBvecArray);
 	 kspace.setInjArray(InjArray);
 	 kspace.setFASArray(FASArray);
 	 kspace.setTauArray(tauArray);
-         kspace.setFTLATArray(FTLATArray);
 
 	 if(_options.Source)
 	   {
@@ -917,12 +779,9 @@ class COMETModel : public Model
              shared_ptr<TArray> ebdyArray(new TArray(numcells*kcount));
              ebdyArray->zero();
              kspace.setebdryArray(ebdyArray); 
-             shared_ptr<TArray> RHSArray(new TArray(numcells*(kcount)));
+             shared_ptr<TArray> RHSArray(new TArray(numcells*kcount));
              RHSArray->zero();
              kspace.setRHSArray(RHSArray);
-             shared_ptr<TArray> MRHSArray(new TArray(numcells));
-             MRHSArray->zero();
-             kspace.setMRHSArray(MRHSArray); 
              shared_ptr<TArray> peArray(new TArray(numcells*kcount));
              peArray->zero();
              kspace.setpeArray(peArray);
@@ -945,7 +804,6 @@ class COMETModel : public Model
 	 
 	 for(int c=0;c<numcells;c++)
 	   {
-             (*FTLATArray)[c]=Tinit;
 	     int cellIndex=kspace.getGlobalIndex(c,0);
 	     for (int k=0;k<numK;k++)
 	       {
@@ -958,9 +816,8 @@ class COMETModel : public Model
 		     const T einit=mode.calce0(Tinit);
 		     T tau=mode.gettau();
 		     (*eArray)[cellIndex]=einit;
-//		     (*e0Array)[cellIndex]=einit;
+		     (*e0Array)[cellIndex]=einit;
 		     (*ResidArray)[cellIndex]=0.;
-                     (*PBvecArray)[cellIndex]=0.;
 		     (*InjArray)[cellIndex]=0.;
 		     (*FASArray)[cellIndex]=0.;
 		     (*tauArray)[cellIndex]=tau;
@@ -968,7 +825,7 @@ class COMETModel : public Model
 
 		   }
 	       }
-//	     kspace.updateTau(c,Tinit);
+	     kspace.updateTau(c,Tinit);
 	   }
 
 	 BCfaceArray& BCfArray=*(_BFaces[n]);
@@ -1248,7 +1105,7 @@ class COMETModel : public Model
 		  {	      
 		    FloatValEvaluator<T>
 		      bTemperature(bc.getVal("specifiedTemperature"),faces);
-//		    cout<<"C#1251: "<<endl;
+		    
 		    if(_level>0 || _options.Convection=="FirstOrder")
 		      cbc.applyTemperatureWallCoarse(bTemperature);
 		    else
@@ -1630,7 +1487,8 @@ class COMETModel : public Model
 		    CoarseGhost[n]+=coarseFaces+1;
 		    outGhost+=coarseFaces+1;
 		  }
-		else
+		else if(_bcMap[fg.id]->bcType == "temperature" ||
+			_bcMap[fg.id]->bcType == "reflecting"	)
 		  {
 		    for(int i=0;i<faceCount;i++)
 		      {
@@ -3066,17 +2924,19 @@ class COMETModel : public Model
 #ifdef FVM_PARALLEL
 	swapGhostInfo();
 #endif
-         //applyInterfaceBoundaries();
+
 	if(_options.Scattering=="Full")
 	  {
 	    applyTemperatureBoundaries();
 	    if(_level==0)
 	      {
+                cout<<"CMODEL#2933: "<<endl;
 		CDisc.COMETSolveFull(dir,_level);
-		//CDisc.COMETSolveFull(-dir,_level);
+		CDisc.COMETSolveFull(-dir,_level);
 	      }
 	    else
 	      {
+                cout<<"CMODEL#2939: "<<endl;
 		CDisc.COMETSolveCoarse(dir,_level); 
 		CDisc.COMETSolveCoarse(-dir,_level); 
 	      }
@@ -3085,23 +2945,20 @@ class COMETModel : public Model
 	  {
 	    if(_level>0 || _options.Convection=="FirstOrder")
 	      {
+                cout<<"CMODEL#2948: "<<endl;  
 		applyTemperatureBoundaries();
-		CDisc.COMETSolveCoarse(dir,_level);
-         //       cout<<"CMODEL#2955:" <<endl;  
-                if(_options.dirSweeps==2) 
-        		CDisc.COMETSolveCoarse(-dir,_level); 
-                //cout<<"CMODEL#2957:" <<_options.dirSweeps<<endl; 
+		CDisc.COMETSolveCoarse(dir,_level); 
+		CDisc.COMETSolveCoarse(-dir,_level); 
 	      }
 	    else
 	      {
-          //      cout<<"CMODEL#2969:" <<endl;
+                cout<<"CMODEL#2955: "<<endl;
 		//applyTemperatureBoundaries();
 		CDisc.COMETSolveFine(dir,_level);
 		CDisc.COMETSolveFine(-dir,_level);
 	      }
 	  }
 	
-//        cout<<"CMODEL#2967:" <<endl; 
 	if(!_MeshToIC.empty())
 	  {
 	    IntArray& ICs=*_MeshToIC[msh];
@@ -3120,8 +2977,7 @@ class COMETModel : public Model
   T updateResid(const bool addFAS)
   {
     const int numMeshes=_meshes.size();
-   if (_options.verb==1)
-    cout<<"CMODEL#3044: "<<endl;
+
     COMETInterface<T> ComInt(_meshes,_kspaces,_MeshKspaceMap,_macro,_geomFields);
 
     const int listSize=_IClist.size();
@@ -3154,7 +3010,6 @@ class COMETModel : public Model
 	CDisc.setfgFinder();
 	if(_options.Scattering=="Full")
 	  {
-    //       cout<<"CMODEL#3020: "<<endl;  
 	    if(_level==0)
 	      CDisc.findResidFull();
 	    else
@@ -3162,17 +3017,10 @@ class COMETModel : public Model
 	  }
 	else
 	  {
-   //         cout<<"CMODEL#3030: "<<endl;
 	    if(_level>0 || _options.Convection=="FirstOrder")
-            {
-//	      cout<<"CMODEL#3031: "<<endl;
-              CDisc.findResidCoarse(addFAS);
-            } 
+	      CDisc.findResidCoarse(addFAS);
 	    else
-            {   
-  //            cout<<"CMODEL#3037: "<<endl;    
 	      CDisc.findResidFine();
-            } 
 	  }
 
 	currentResid=CDisc.getAveResid();
@@ -3206,12 +3054,10 @@ class COMETModel : public Model
     if(_level+1<_options.maxLevels)
       {
 	updateResid(_level!=0);
-     //   cout<<"CM#3143: "<<endl;    
 	injectResid();
 	_coarserLevel->sete0();
 	_coarserLevel->makeFAS();
 	_coarserLevel->cycle();
-      //  cout<<"CMODEL#3067: "<<_level<<endl; 
 	correctSolution();
       }
     
@@ -3235,8 +3081,7 @@ class COMETModel : public Model
 	const CRConnectivity& CoarserToFiner=coarserMesh.getConnectivity(coarserCells,finerCells);
 	const TArray& coarserVol=dynamic_cast<TArray&>(_geomFields.volume[coarserCells]);
 	const TArray& finerVol=dynamic_cast<TArray&>(_geomFields.volume[finerCells]);
-        const VectorT3Array& finercoords=dynamic_cast<const VectorT3Array&>(_geomFields.coordinate[finerCells]);
-         const VectorT3Array& coarsercoords=dynamic_cast<const VectorT3Array&>(_geomFields.coordinate[coarserCells]);
+
 	TArray& coarserVar=coarserKspace.geteArray();
 	TArray& coarserInj=coarserKspace.getInjArray();
 	TArray& coarserFAS=coarserKspace.getFASArray();
@@ -3247,18 +3092,15 @@ class COMETModel : public Model
 	const int cellTotCount=coarserCells.getCount();
 	coarserVar.zero();
 	coarserFAS.zero();
-        if (_options.verb==2)
-          cout<<"CMODEL#3104: "<<numMeshes<<" "<<cellCount<<" "<<cellTotCount<<" "<<coarserKspace.getlength()<<endl;
+
 	for(int c=0;c<cellCount;c++)
 	  {
 	    const int fineCount=CoarserToFiner.getCount(c);
-//	   cout<<"CMODEL#3116: "<<cellCount<<" "<<cellTotCount<<" "<<c<<" "<<fineCount<<" "<<CoarserToFiner(c,0)<<" "<<CoarserToFiner(c,1)<<" "<<coarsercoords[c][0]<<" "<<coarsercoords[c][1]<<endl; 
+	    
 	    //sum up contributions from fine cells
 	    for(int fc=0;fc<fineCount;fc++)
 	      {
 		const int cell=CoarserToFiner(c,fc);
-                if (_options.verb==2)
-                 cout<<"CMODEL#3116: "<<c<<" "<<fc<<" "<<cell<<endl;  
 		const int klen=finerKspace.getlength();
 		int coarserCellIndex=coarserKspace.getGlobalIndex(c,0);
 		int finerCellIndex=finerKspace.getGlobalIndex(cell,0);
@@ -3269,17 +3111,14 @@ class COMETModel : public Model
 		    const int numModes=kvol.getmodenum();
 		    for(int m=0;m<numModes;m++)
 		      {
-  //                      cout<<"CMODEL#3141: "<<c<<" "<<cell<<" "<<fc<<" "<<coarserCellIndex<<" "<<finerCellIndex<<" "<<finerVar[finerCellIndex]<<" "<<finerRes[finerCellIndex]<<endl;
 			coarserVar[coarserCellIndex]+=finerVar[finerCellIndex]*finerVol[cell];
 			coarserFAS[coarserCellIndex]+=finerRes[finerCellIndex];
 			finerCellIndex++;
 			coarserCellIndex++;
-           if (_options.verb==2)
-           cout<<"CMODEL#3141: "<<c<<" "<<cell<<" "<<fc<<" "<<k<<" "<<m<<" "<<coarserCellIndex<<" "<<finerCellIndex<<" "<<finerRes[finerCellIndex]<<" "<<coarserFAS[coarserCellIndex]<<endl;
 		      }
 		  }
 	      }
-                
+
 	    //make volume average
 	    int coarserCellIndex=coarserKspace.getGlobalIndex(c,0);
 	    const int klen=finerKspace.getlength();
@@ -3292,23 +3131,17 @@ class COMETModel : public Model
 		  {
 		    coarserVar[coarserCellIndex]/=coarserVol[c];
 		    coarserInj[coarserCellIndex]=coarserVar[coarserCellIndex];
-                    if (_options.verb==2)
-           cout<<"CMODEL#3230: "<<c<<" "<<k<<" "<<m<<" "<<coarserCellIndex<<" "<<coarserInj[coarserCellIndex]<<endl;
 		    coarserCellIndex++;
-    //                cout<<"CMODEL#3174: "<<coarserCellIndex-1<<" "<<coarserVar[coarserCellIndex-1]<<endl;
 		  }
 	      }
-           } 
-          // cout<<"CMODEL#3156: "<<coarserVar[0]<<" "<<coarserVar[1]<<" "<<coarserVar[2]<<" "<<coarserVar[3]<<" "<<endl;
-	 
+	  }
+
 	for(int c=cellCount;c<cellTotCount;c++)
 	  {
-	    const int cell=CoarserToFiner(c,0);             
+	    const int cell=CoarserToFiner(c,0);
 	    int coarserCellIndex=coarserKspace.getGlobalIndex(c,0);
 	    int finerCellIndex=finerKspace.getGlobalIndex(cell,0);
 	    const int klen=finerKspace.getlength();
-            if (_options.verb==2)
-            cout<<"CMODEL#3162: "<<c<<" "<<cell<<" "<<CoarserToFiner(c,1)<<" "<<coarserCellIndex<<" "<<finerCellIndex<<" "<<coarsercoords[c][0]<<" "<<coarsercoords[c][1]<<" "<<finercoords[cell][0]<<" "<<finercoords[cell][1]<<endl;
 	    for(int k=0;k<klen;k++)
 	      {
 		Tkvol& kvol=finerKspace.getkvol(k);
@@ -3320,14 +3153,11 @@ class COMETModel : public Model
 		    coarserVar[coarserCellIndex]+=finerVar[finerCellIndex];
 		    coarserFAS[coarserCellIndex]+=finerRes[finerCellIndex];	
 		    coarserInj[coarserCellIndex]=coarserVar[coarserCellIndex];
-               if (_options.verb==2)
-                cout<<"CMODEL#3183: "<<c<<" "<<coarserCellIndex<<" "<<finerCellIndex<<" "<<coarserVar[coarserCellIndex]<<" "<<finerVar[finerCellIndex]<<" "<<finerRes[finerCellIndex]<<endl; 		    
-
-                   coarserCellIndex++;
+		    coarserCellIndex++;
 		    finerCellIndex++;
 		  }
 	      }
-	  } 
+	  }	
 	
 	TArray& coarserVarM=dynamic_cast<TArray&>(coarserMacro.temperature[coarserCells]);
 	TArray& coarserInjM=dynamic_cast<TArray&>(coarserMacro.TlInjected[coarserCells]);
@@ -3340,7 +3170,7 @@ class COMETModel : public Model
 	    const int fineCount=CoarserToFiner.getCount(c);
 	    coarserVarM[c]=0.;
 	    coarserFASM[c]=0.;
-	    	
+		
 	    for(int fc=0;fc<fineCount;fc++)
 	      {
 		const int cell=CoarserToFiner(c,fc);
@@ -3349,17 +3179,12 @@ class COMETModel : public Model
 	      }
 	    coarserVarM[c]/=coarserVol[c];
 	    coarserInjM[c]=coarserVarM[c];
-      //      if (_options.verb==2)
-    //            cout<<"CMODEL#3286: "<<c<<" "<<fc<<" "<<fineCount<<" "<<cellCount<<" "<<cell<<" "<<coarserFASM[c]<<" "<<finerResM[cell]<<" "<<finerVarM[cell]<<" "<<coarserVarM[c]<<" "<<coarserInjM[c]<<endl;
-
 	  }	
       }
   }
   
   void makeFAS()
   {
-   if (_options.verb==1)
-        cout<<"CMODEL#3276: "<<endl;  
     updateResid(false);
 
     const int numMeshes = _meshes.size();
@@ -3369,15 +3194,10 @@ class COMETModel : public Model
 	Tkspace& kspace=*_kspaces[_MeshKspaceMap[n]];
 	const StorageSite& cells=mesh.getCells();
 	kspace.makeFAS();
-        const int ncells=cells.getSelfCount();
+
 	TArray& resArray=dynamic_cast<TArray&>(_macro.TlResidual[cells]);
 	TArray& fasArray=dynamic_cast<TArray&>(_macro.TlFASCorrection[cells]);
 	fasArray-=resArray;
-        if (_options.verb==1)
-       {
-         for (int c=0;c<ncells;c++)       
-          cout<<"CMODEL#3228: "<<ncells<<" "<<c<<" "<<resArray[c]<<" "<<fasArray[c]+resArray[c]<<" "<<fasArray[c]<<endl; 
-       }
       }
   }
 
@@ -3393,11 +3213,9 @@ class COMETModel : public Model
 	TArray& Tl=dynamic_cast<TArray&>(_macro.temperature[cells]);
 	TArray& e0Array=kspace.gete0Array();
 	const int klen=kspace.getlength();
-        const VectorT3Array& coords=dynamic_cast<const VectorT3Array&>(_geomFields.coordinate[cells]);
 
 	for(int c=0;c<cellCount;c++)
 	  {
-       //     cout<<"CMODEL#3248: "<<cellCount<<" "<<c<<" "<<coords[c][0]<<" "<<coords[c][1]<<" "<<Tl[c]<<endl;
 	    const T Tlat=Tl[c];
 	    int cellIndex=kspace.getGlobalIndex(c,0);
 	    for(int k=0;k<klen;k++)
@@ -3408,7 +3226,7 @@ class COMETModel : public Model
 		  {
 		    Tmode& mode=kvol.getmode(m);
 		    e0Array[cellIndex]=mode.calce0(Tlat);
-//		    kspace.updateTau(c,Tl[c]);
+		    kspace.updateTau(c,Tl[c]);
 		    cellIndex++;
 		  }
 	      }
@@ -3419,8 +3237,7 @@ class COMETModel : public Model
   void correctSolution()
   {
     const int numMeshes = _meshes.size();
-    if (_options.verb==2)
-     cout<<"CMODEL#3247: "<<numMeshes<<endl;
+    
     for (int n=0; n<numMeshes; n++)
       {
 	const Mesh& finerMesh=*_meshes[n];
@@ -3438,11 +3255,9 @@ class COMETModel : public Model
 	TArray& coarserArray=coarserKspace.geteArray();
 	TArray& finerArray=finerKspace.geteArray();
 	TArray& injArray=coarserKspace.getInjArray();
-        const int cellCount=coarserCells.getSelfCount();
-        const int cellTotCount=coarserCells.getCount();
-
-	if (_options.verb==2)
-         cout<<"CMODEL3375: "<<cellCount<<" "<<cellTotCount<<endl;
+	
+	const int cellCount=coarserCells.getSelfCount();
+	const int cellTotCount=coarserCells.getCount();
 
 	for(int c=0;c<cellCount;c++)
 	  {
@@ -3459,12 +3274,10 @@ class COMETModel : public Model
 		    const int numModes=kvol.getmodenum();
 		    for(int m=0;m<numModes;m++)
 		      {
-			const T correction=coarserArray[coarserCellIndex]-injArray[coarserCellIndex];		   
-       //                 cout<<"CDISC#3325: "<<c<<" "<<fc<<" "<<k<<" "<<m<<" "<<coarserCellIndex<<" "<<finerCellIndex<<" "<<finerArray[finerCellIndex]<<" "<<correction<<endl; 
+			const T correction=coarserArray[coarserCellIndex]-injArray[coarserCellIndex];		    
 			finerArray[finerCellIndex]+=correction;
 			coarserCellIndex++;
 			finerCellIndex++;
-         //               cout<<"CDISC#3329: "<<c<<" "<<fc<<" "<<k<<" "<<m<<" "<<coarserCellIndex<<" "<<finerCellIndex<<" "<<finerArray[finerCellIndex]<<" "<<injArray[coarserCellIndex]<<" "<<endl; 
 		      }
 		  }
 	      }
@@ -3473,10 +3286,8 @@ class COMETModel : public Model
 	for(int c=cellCount;c<cellTotCount;c++)
 	  {
 	    const int f=coarseCellFaces(c,0);
-        //    cout<<"CMODEL#3325: "<<c<<" "<<cellCount<<" "<<cellTotCount<<" "<<f<<" "<<BCfArray[f]<<endl;
 	    if(BCfArray[f]==4)  //correct interface cells only
 	      {
-          //      cout<<"CMODEL#3345: "<<endl;
 		const int fineCount=CoarserToFiner.getCount(c);
 		for(int fc=0;fc<fineCount;fc++)
 		  {
@@ -3497,24 +3308,22 @@ class COMETModel : public Model
 			    finerCellIndex++;
 			  }
 		      }
+
 		  }
 	      }
-	  }  
+	  }
 
 	TArray& coarserArrayM=dynamic_cast<TArray&>(coarserMacro.temperature[coarserCells]);
 	TArray& injArrayM=dynamic_cast<TArray&>(coarserMacro.TlInjected[coarserCells]);
 	TArray& finerArrayM=dynamic_cast<TArray&>(_macro.temperature[finerCells]);
-         
-//	cout<<"CMODEL3433: "<<cellCount<<endl;
+	
 	for(int c=0;c<cellCount;c++)
 	  {
 	    const int fineCount=CoarserToFiner.getCount(c);
 	    const T correction=coarserArrayM[c]-injArrayM[c];
 	    
 	    for(int fc=0;fc<fineCount;fc++)
-	 {     finerArrayM[CoarserToFiner(c,fc)]+=correction;
- //             cout<<"CMODEL#3376: "<<cellCount<<" "<<fineCount<<" "<<c<<" "<<fc<<" "<<correction<<" "<<finerArrayM[CoarserToFiner(c,fc)]<<" "<<finerArrayM[CoarserToFiner(c,fc)]-correction<<endl;
-         } 
+	      finerArrayM[CoarserToFiner(c,fc)]+=correction;
 	  }
       }
   }
@@ -3536,208 +3345,19 @@ class COMETModel : public Model
 	  kspace.NewtonSolve(TL[c],e0Array[c]*tauTot);
       }
   }
-
-  void initializeInterfaceBoundaries()
-  {
-   const int numMeshes=_meshes.size();
-   const T Tinit=_options["initialTemperature"];
-    for(int n=0;n<numMeshes;n++)
-      {
-        const Mesh& mesh=*_meshes[n];
-        Tkspace& kspace=*_kspaces[_MeshKspaceMap[n]];
-   //     TArray& ebdryArray=kspace.getebdryArray();
-        TArray& eArray=kspace.geteArray();
-        int numK=kspace.getlength();
-        foreach(const FaceGroupPtr fgPtr, mesh.getBoundaryFaceGroups())
-          {
-            const FaceGroup& fg = *fgPtr;
-            if(fg.id>0)
-              {
-                const StorageSite& faces = fg.site;
-                const COMETBC<T>& bc = *_bcMap[fg.id];
-                const int nFaces=faces.getCount();
-                const CRConnectivity& faceCells=mesh.getFaceCells(faces);
-                const Field& areaField=_geomFields.area;
-               const VectorT3Array& faceArea=dynamic_cast<const VectorT3Array&>(areaField[faces]);
-
-                if(bc.bcType=="nullpy")
-                {
-                 for (int f=0;f<nFaces;f++)
-                 {
-                 const int c0 = faceCells(f,0);
-                 const int c1 = faceCells(f,1);
-                 for (int k=0;k<numK;k++)
-                 {
-                   Tkvol& kv=kspace.getkvol(k);
-                   int numM=kv.getmodenum();
-                   for (int m=0;m<numM;m++)
-                   {
-                     Tmode& mode=kv.getmode(m);
-                     VectorT3 vg = mode.getv();
-                     const int index=mode.getIndex()-1;
-                     const VectorT3 en =faceArea[f];
-                     const T vg_dot_en = vg[0]*en[0]+vg[1]*en[1]+vg[2]*en[2];
-                     const int c0ind=kspace.getGlobalIndex(c0,index);
-                     const int c1ind=kspace.getGlobalIndex(c1,index);
-                      if (vg_dot_en > T_Scalar(0.0))
-                     {
-                      eArray[c1ind]=eArray[c0ind];
-                     }
-                     else
-                      eArray[c1ind]=mode.calce0(Tinit); // ebdryArray[c0ind];
-
-                  }
-                }
-             }
-           }
-      }
-    }
-   }
- }
-
-  void applyInterfaceBoundaries()
-  {
-   const int numMeshes=_meshes.size();
-   const T Tinit=_options["initialTemperature"];
-   for(int n=0;n<numMeshes;n++)
-      {
-        const Mesh& mesh=*_meshes[n];
-        const StorageSite& cells=mesh.getCells();
-        Tkspace& kspace=*_kspaces[_MeshKspaceMap[n]];
-        TArray& ebdryArray=kspace.getebdryArray();
-        TArray& eArray=kspace.geteArray();
-        TArray& PE=kspace.getpeArray();
-        int numK=kspace.getlength();
-        T insum=0.0;
-        TArray& TlArray=dynamic_cast<TArray&>(_macro.temperature[cells]);
-        foreach(const FaceGroupPtr fgPtr, mesh.getBoundaryFaceGroups())
-          {
-            const FaceGroup& fg = *fgPtr;
-            if(fg.id>0)
-              {
-                const StorageSite& faces = fg.site;
-                const COMETBC<T>& bc = *_bcMap[fg.id];
-                const int nFaces=faces.getCount();
-                const CRConnectivity& faceCells=mesh.getFaceCells(faces);
-                const Field& areaField=_geomFields.area;
-                const VectorT3Array& faceArea=dynamic_cast<const VectorT3Array&>(areaField[faces]);
-                if(bc.bcType=="nullpy")
-                {
-                   for (int f=0;f<nFaces;f++)
-                 {
-                 const int c0 = faceCells(f,0);
-                 const int c1 = faceCells(f,1);
-                 for (int k=0;k<numK;k++)
-                 {
-                   Tkvol& kv=kspace.getkvol(k);
-                   int numM=kv.getmodenum();
-                   for (int m=0;m<numM;m++)
-                   {
-                     Tmode& mode=kv.getmode(m);
-                     VectorT3 vg = mode.getv();
-                     const int index=mode.getIndex()-1;
-                     const VectorT3 en =faceArea[f];
-                     const T vg_dot_en = vg[0]*en[0]+vg[1]*en[1]+vg[2]*en[2];
-                     const int c0ind=kspace.getGlobalIndex(c0,index);
-                     const int c1ind=kspace.getGlobalIndex(c1,index);
-                     if (vg_dot_en > T_Scalar(0.0))
-                     {
-                      eArray[c1ind]=eArray[c0ind];
-                     }
-                    if (vg_dot_en < T_Scalar(0.0))
-                     {
-                       eArray[c1ind]=ebdryArray[c1ind]; // PE[c1ind];
-                      TlArray[c1]=0.0;
-                     } 
-                  }
-                }
-             }
-           }
-      }
-    }
-   }
- }
- 
-  void initebc()
-  {
-   const int numMeshes=_meshes.size();
-   const T Tinit=_options["initialTemperature"];
-   for(int n=0;n<numMeshes;n++)
-      {
-        const Mesh& mesh=*_meshes[n];
-        const StorageSite& cells=mesh.getCells();
-        Tkspace& kspace=*_kspaces[_MeshKspaceMap[n]];
-        TArray& ebdryArray=kspace.getebdryArray();
-        TArray& eArray=kspace.geteArray();
-        int numK=kspace.getlength();
-        TArray& PE=kspace.getpeArray();
-        T insum=0.0;
-        TArray& TlArray=dynamic_cast<TArray&>(_macro.temperature[cells]);
-        foreach(const FaceGroupPtr fgPtr, mesh.getBoundaryFaceGroups())
-          {
-            const FaceGroup& fg = *fgPtr;
-            if(fg.id>0)
-              {
-                const StorageSite& faces = fg.site;
-                const COMETBC<T>& bc = *_bcMap[fg.id];
-                const int nFaces=faces.getCount();
-                const CRConnectivity& faceCells=mesh.getFaceCells(faces);
-                const Field& areaField=_geomFields.area;
-                const VectorT3Array& faceArea=dynamic_cast<const VectorT3Array&>(areaField[faces]);
-                if(bc.bcType=="nullpy")
-                {
-                   for (int f=0;f<nFaces;f++)
-                 {
-                 const int c0 = faceCells(f,0);
-                 const int c1 = faceCells(f,1);
-                 for (int k=0;k<numK;k++)
-                 {
-                   Tkvol& kv=kspace.getkvol(k);
-                   int numM=kv.getmodenum();
-                   for (int m=0;m<numM;m++)
-                   {
-                     Tmode& mode=kv.getmode(m);
-                     VectorT3 vg = mode.getv();
-                     const int index=mode.getIndex()-1;
-                     const VectorT3 en =faceArea[f];
-                     const T vg_dot_en = vg[0]*en[0]+vg[1]*en[1]+vg[2]*en[2];
-                     const int c0ind=kspace.getGlobalIndex(c0,index);
-                     const int c1ind=kspace.getGlobalIndex(c1,index);
-                      if (vg_dot_en > T_Scalar(0.0))
-                    {
-                      eArray[c1ind]=eArray[c0ind];
-                     }
-                    if (vg_dot_en < T_Scalar(0.0))
-                     {
-                  //     eArray[c1ind]=ebdryArray[c1ind];
-                      TlArray[c1]=0.0;
-                     }  
-                    }
-                }
-             }
-           }
-      }
-    }
-   }
- }
-
-
+  
   void advance(const int iters)
   {
-//    inite(); 
-  ////  _residual=updateResid(false);
+ //   inite(); 
+    _residual=updateResid(false);
     int niters=0;
     const T absTol=_options.absTolerance;
     const int show=_options.showResidual;
-    const int Plevel=_options.PyLevels;
     //inite();
     while(niters<iters) //&& (_residual>absTol))
       {
 	cycle();
-    //  if (Plevel>0)
-    //     updateResid(false);
 	niters++;
-       // cout<<"CMODEL#3367:"<<endl;
 	_residual=updateResid(false);
 	if(niters%show==0)
 	  cout<<"Iteration:"<<niters<<" Residual:"<<_residual<<endl;
@@ -3746,51 +3366,6 @@ class COMETModel : public Model
     
     //applyTemperatureBoundaries();
     //calcModeTemps();
-  }
-
-   T HeatFluxIntegralArr(const Mesh& mesh, const int faceGroupId, const int fcellId)
-  {
-    T r(0.);
-    bool found = false;
-    const int n=mesh.getID();
-    Tkspace& kspace=*_kspaces[_MeshKspaceMap[n]];
-    TArray& eArray=kspace.geteArray();
-    const T DK3=kspace.getDK3();
-    const T hbar=6.582119e-16;  // (eV s)
-    foreach(const FaceGroupPtr fgPtr, mesh.getBoundaryFaceGroups())
-      {
-        const FaceGroup& fg = *fgPtr;
-        if (fg.id == faceGroupId)
-          {
-            const StorageSite& faces = fg.site;
-            const int nFaces = faces.getCount();
-            const CRConnectivity& faceCells=mesh.getFaceCells(faces);
-            const Field& areaField=_geomFields.area;
-            const VectorT3Array& faceArea=dynamic_cast<const VectorT3Array&>(areaField[faces]);
-                int f=fcellId;
-                const VectorT3 An=faceArea[f];
-                const int c1=faceCells(f,1);
-                int cellIndex=kspace.getGlobalIndex(c1,0);
-                for(int k=0;k<kspace.getlength();k++)
-                  {
-                    Tkvol& kv=kspace.getkvol(k);
-                    int modenum=kv.getmodenum();
-                    for(int m=0;m<modenum;m++)
-                      {
-                        VectorT3 vg=kv.getmode(m).getv();
-                        T dk3=kv.getdk3();
-                        const T vgdotAn=An[0]*vg[0]+An[1]*vg[1]+An[2]*vg[2];
-                        r += eArray[cellIndex]*vgdotAn*(dk3/DK3);//*energy;
-                        cellIndex++;
-                  }
-              }
-            found=true;
-          }
-      }
-
-    if (!found)
-      throw CException("getHeatFluxIntegral: invalid faceGroupID");
-    return r*DK3;
   }
 
   T HeatFluxIntegral(const Mesh& mesh, const int faceGroupId)

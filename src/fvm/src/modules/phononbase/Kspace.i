@@ -30,10 +30,13 @@ class Kspace
   int gettotmodes();
   T getDK3();
   T calcPhononTemp(const int c, const int index, T guess);
+  T calcPhonSpheat(const int c, const int index, T guess);
   T calcSpecificHeat(T Tl);
   T calcSpecificHeat(T Tl,const int m);
+  T calcLatTemp(const int c); 
   T findKnStats(const T length);
   T FindBallisticHeatRate(const Tvec Af,const T T1,const T T2);
+  T calcModeTempincell(const int c, const int modeindex);
   ArrayBase* getVelocities();
   ArrayBase* getVelocities(const int M);
   ArrayBase* getReflectionArray(const Mesh& mesh, const int FgId);
@@ -59,12 +62,28 @@ class Kspace
   ArrayBase* gete0CellValsPy(const T Tl);
   ArrayBase* getFreqArrayPy();
   ArrayBase* getTauArrayPy();
+  ArrayBase* geteArrayPy();
+  ArrayBase* gete0ArrayPy();
+  ArrayBase* getVgxArrayPy();
+  ArrayBase* getVgyArrayPy();
+  ArrayBase* getVgzArrayPy();
+  ArrayBase* getebdryArrayPy();
+  ArrayBase* getKvolsPy();
+  ArrayBase* getCTLATArrayPy();
+  ArrayBase* getFTLATArrayPy();
+  ArrayBase* getpe0ArrayPy();
+  ArrayBase* getpeArrayPy();
+  ArrayBase* getPBvecArrayPy();
+  ArrayBase* getMPBvecArrayPy();
   ArrayBase* getIsources(const int c, const bool correct);
   ArrayBase* getIIsources(const int c, const bool correct);
   ArrayBase* getEmptyArray(const int length);
+  ArrayBase* getResArrayPy();
+  ArrayBase* getRHSArrayPy(); 
+  ArrayBase* getMRHSArrayPy(); 
   void weightArray(ArrayBase* ep);
-  void setTref(const T Tref);
   ArrayBase* getSourceArrayPy();
+  void setTref(const T Tref);
 
   %extend{
     std::vector<Kspace<T>*>& MakeList()
@@ -89,7 +108,15 @@ class Kspace
   DensityOfStates<T>* _DOS;
   ScatteringKernel<T>* _ScattKernel;
   TArrPtr _Source;
-  
+  TArrPtr _CTLAT; 
+  TArrPtr _FTLAT;
+  TArrPtr _ebdry;
+  TArrPtr _pe;
+  TArrPtr _pe0; 
+  TArrPtr _PBvec;
+  TArrPtr _MPBvec;
+  int verb;
+  int linear;
 };
 
 template <class T>
@@ -113,7 +140,7 @@ class ScatteringKernel
   KSConnectivity<T> _type2Collisions;
   T _maxPhi;
   T _maxDkl;
-
+  COMETModelOptions<T> _options;
 };
 
 
