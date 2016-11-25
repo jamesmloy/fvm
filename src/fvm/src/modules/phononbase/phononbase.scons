@@ -2,10 +2,16 @@ Import('env')
 
 src=['PhononMacro.cpp']
 
-env.createSharedLibrary('phononbase',src,['fvmbase','rlog','cgal','boost'])
+env.createSharedLibrary('phononbase',
+                        src,
+                        ['fvmbase','rlog','cgal'])
 
-env.createATypedSharedLibrary('phonon_atyped','phonon.cpp',['models_atyped','fvmbase','rlog','cgal','phononbase','boost'])
+env.createATypedSharedLibrary('phonon_atyped_base',
+                              ['phonon.cpp',],
+                              ['models_atyped','fvmbase','rlog','cgal','phononbase'])
 
-env.createSwigModule('phononbaseExt','nontemp.i',['fvmbase','rlog','phononbase','cgal','boost'])
+env.createSwigModule('phononbaseExt','nontemp.i',['fvmbase','rlog','phononbase','cgal'])
 
-env.createATypedSwigModule('phonon_atyped',['phonon.i'],['phonon_atyped','phononbase','fvmbase','rlog','cgal','blas','boost'])
+env.createATypedSwigModule('phonon_atyped',
+                           ['phonon.i'],
+                           ['phonon_atyped_base','phononbase','fvmbase','rlog','cgal','blas'])

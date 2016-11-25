@@ -122,6 +122,9 @@ public:
 
   int add(const int index, const int val)
   {
+    if (!(val < _colDim) || !(index < _rowDim))
+      throw CException("Adding invalid index");
+
     int pos = (*_row)[index];
     (*_col)[pos] = val;
     (*_row)[index]++;

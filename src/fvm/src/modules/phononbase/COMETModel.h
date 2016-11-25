@@ -1412,8 +1412,7 @@ class COMETModel : public Model
 		    CoarseGhost[n]+=coarseFaces+1;
 		    outGhost+=coarseFaces+1;
 		  }
-		else if(_bcMap[fg.id]->bcType == "temperature" ||
-			_bcMap[fg.id]->bcType == "reflecting"	)
+		else
 		  {
 		    for(int i=0;i<faceCount;i++)
 		      {

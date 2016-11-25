@@ -20,6 +20,7 @@ CException::CException(const string& what) :
 #if 1
 #ifdef __GNUC__
     void *traces[100];
+    cout << what << endl;
     cout << "Backtrace... " << endl;
     int traceCount = backtrace(traces,20);
     char **traceStrings = backtrace_symbols(traces, traceCount);
