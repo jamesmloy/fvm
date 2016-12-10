@@ -1385,10 +1385,22 @@ class COMETModel : public Model
 	inList[i]->setCoarseKspace(newKspacePtr);
 	outList.push_back(newKspacePtr);
       }
-    
+
+/*
     for(int i=0;i<len;i++)
       inList[i]->giveTransmissions();
+*/
+  }
 
+  void giveTransmissions()
+  {
+    if (_coarserLevel)
+    {
+      for (unsigned int k = 0; k < _kspaces.size(); ++k)
+        _kspaces[k]->giveTransmissions();
+
+      _coarserLevel->giveTransmissions();
+    }
   }
 
   void MakeInteriorCoarseMesh(const MeshList& inMeshes, GeomFields& inGeomFields,

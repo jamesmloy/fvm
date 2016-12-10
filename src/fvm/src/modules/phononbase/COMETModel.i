@@ -55,6 +55,7 @@ class COMETModel : public Model
   void calcBandRelEnergy();
   void calcBandFlux();
   ArrayBase* binwiseHeatFluxIntegral(const Mesh& mesh, const int faceGroupId);
+  void giveTransmissions();
 
 
  private:
