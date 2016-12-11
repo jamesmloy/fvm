@@ -1403,6 +1403,26 @@ class COMETModel : public Model
     }
   }
 
+  Tkspace& getKspace(unsigned int const level)
+  {
+    if (level == _level)
+      return *_kspaces[0];
+    else
+    {
+      if (_coarserLevel)
+      {
+        return _coarserLevel->getKspace(level);
+      }
+      else
+      {
+        if (level > _level)
+          throw CException("Asking for an invalid level");
+        else
+          throw CException("Missing coarse level");
+      }
+    }
+  }
+
   void MakeInteriorCoarseMesh(const MeshList& inMeshes, GeomFields& inGeomFields,
 			      MeshList& outMeshes, IntArray& CoarseCounts,
 			      map<const StorageSite*, IntArray*>& PreFacePairMap, IntArray& CoarseGhost,
