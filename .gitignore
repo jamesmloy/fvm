@@ -5,3 +5,4 @@ dist
 *.o
 env-*sh
 env-*.csh
+*~
