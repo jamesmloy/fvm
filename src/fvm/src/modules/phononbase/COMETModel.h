@@ -70,6 +70,8 @@ class COMETModel : public Model
   typedef pair<const StorageSite*, const StorageSite*> SSPair;
   typedef map<SSPair,shared_ptr<Array<int> > > ScatGathMaps;
   typedef map<const StorageSite*, StorageSite*> SiteMap;   //fine to coarse
+
+  typedef vector<COMETModel<T>*> CModelList;
   
  COMETModel(const MeshList& meshes, const int level, GeomFields& geomFields,
 	    TkspList& kspaces, PhononMacro& macro):
@@ -4796,7 +4798,27 @@ class COMETModel : public Model
   IClist& getIClist() {return _IClist;}
   MeshICmap& getMeshICmap() {return _MeshToIC;}
 
+  CModelList& getAllModels()
+  {
+    if (_level != 0)
+      throw CException("Only ask for all models from the finest model.");
+
+    if (_allModels.empty())
+    {
+      addModelsToVector(_allModels);
+    }
+
+    return _allModels;
+  }
+
  private:
+
+  void addModelsToVector(CModelList &mList)
+  {
+    mList.push_back(this);
+    if (_coarserLevel)
+      _coarserLevel->addModelsToVector(mList);
+  }
 
   const int _level;    //0 being the finest level
   GeomFields& _geomFields;
@@ -4815,6 +4837,8 @@ class COMETModel : public Model
   IClist _IClist;
   MeshICmap _MeshToIC;
   int _rank;
+
+  CModelList _allModels;
 
 };
 

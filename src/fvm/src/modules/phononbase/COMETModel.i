@@ -19,6 +19,7 @@ class COMETModel : public Model
   typedef Tkspace* TkspPtr;
   typedef vector<TkspPtr> TkspList;
   typedef map<int,int> MeshKspaceMap;
+  typedef vector<COMETModel<T>*> CModelList;
 
   COMETModel(const MeshList& meshes,const int level,GeomFields& geomFields,
 	     TkspList& kspaces,PhononMacro& macro);
@@ -57,6 +58,7 @@ class COMETModel : public Model
   ArrayBase* binwiseHeatFluxIntegral(const Mesh& mesh, const int faceGroupId);
   void giveTransmissions();
   Tkspace& getKspace(unsigned int const level);
+  CModelList& getAllModels();
 
  private:
   
@@ -124,3 +126,4 @@ struct COMETModelOptions : public FloatVarDict<T>
 %template(COMETBCsMap) std::map<int,COMETBC< ATYPE_STR >* >;
 %template(COMETModelA) COMETModel<ATYPE_STR>;
 %template(COMETMKmap) std::map<int,int>;
+%template(COMETModelList) std::vector<COMETModel<ATYPE_STR>* >;
