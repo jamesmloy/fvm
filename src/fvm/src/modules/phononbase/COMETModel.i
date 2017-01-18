@@ -59,6 +59,12 @@ class COMETModel : public Model
   void giveTransmissions();
   Tkspace& getKspace(unsigned int const level);
   CModelList& getAllModels();
+  void doSweeps(int const sweeps);
+  T updateResid(bool const addFas);
+  void injectResid();
+  void sete0();
+  void makeFAS();
+  void correctSolution();
 
  private:
   
